@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Git log window">
+  <defs>
+    <linearGradient id="gw-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3f78e0"/>
+      <stop offset="1" stop-color="#1d3a72"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#gw-bg)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.95">
+    <path d="M22 19v26"/>
+    <path d="M22 25h12a6 6 0 0 1 6 6v3"/>
+  </g>
+  <g fill="#ffffff">
+    <circle cx="22" cy="17" r="4.6"/>
+    <circle cx="22" cy="47" r="4.6"/>
+    <circle cx="40" cy="38" r="4.6"/>
+  </g>
+  <g fill="none" stroke="#9fc0ff" stroke-width="2" opacity="0.75">
+    <path d="M44 15h10M44 21h6"/>
+  </g>
+</svg>

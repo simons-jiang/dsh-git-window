@@ -1,0 +1,56 @@
+{
+  "name": "@local/dsh-git-window",
+  "version": "1.0.0",
+  "description": "IDEA-style Git tool window for DeepSeek Harness: docked commit log with graph and branches, plus a centre diff view.",
+  "type": "module",
+  "icon": "icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "screenshots.json",
+    "docs",
+    "PUBLISHING.md"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node --check index.js && node --check client.js",
+    "test": "node test/api-test.mjs",
+    "test:write": "node test/git-actions-test.mjs",
+    "test:client": "node test/client-smoke.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "git",
+    "git-log",
+    "diff",
+    "merge"
+  ]
+}
