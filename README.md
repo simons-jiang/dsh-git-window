@@ -91,6 +91,11 @@ build.mjs              拼接源码、内联词条、生成 client.js
 test/api-test.mjs      Host API 自测（node test/api-test.mjs <repo>）
 ```
 
+## 交接
+
+接手开发（或在新会话里继续）先读 [HANDOFF.md](HANDOFF.md)：设计约定、架构、路由表、测试、已知边界、
+踩过的坑都在里面，不用翻历史对话。
+
 ## 发布
 
 上架流程（公开仓库 → 可选发 npm → 去 `awesome-dsh-plugin` 提一条条目 PR）、图标与截图要求、
