@@ -141,7 +141,10 @@ function hostValue(method) {
         refs: [{ name: 'main', kind: 'head' }],
         subject: 'feat: 示例提交',
         body: '示例说明',
-        files: [{ path: 'pom.xml', status: 'M', additions: 2, deletions: 1 }],
+        files: [
+          { path: 'pom.xml', status: 'M', additions: 2, deletions: 1 },
+          { path: 'service/src/main/java/com/demo/DeepPathRepository.java', status: 'M', additions: 4, deletions: 0 },
+        ],
         additions: 2,
         deletions: 1,
       }
@@ -312,10 +315,11 @@ check('repository loaded', state.repo?.path === repo, JSON.stringify(state.repo)
 check('commits loaded', state.commits.length === 2, String(state.commits.length))
 check('graph rows built', state.graphRows.length === 2, String(state.graphRows.length))
 check('first commit auto-selected', state.selected?.hash === 'abc1234def', JSON.stringify(state.selected))
-check('files of the selection loaded', state.files.length === 1, JSON.stringify(state.files.map((file) => file.path)))
+check('files of the selection loaded', state.files.length === 2, JSON.stringify(state.files.map((file) => file.path)))
 
 const dockText2 = renderSeat('shell.bottom')
 check('dock renders commits', dockText2.includes('示例提交'), dockText2.slice(0, 160))
+check('file rows show the file name only', dockText2.includes('DeepPathRepository.java') && !dockText2.includes('service/src/main/java'), dockText2.slice(0, 200))
 
 // ------------------------------------------------------------- diff panel seat
 const panelText = renderSeat('main')

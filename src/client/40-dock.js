@@ -481,8 +481,9 @@ function GwFileRow({ file, store, state, tr }) {
     onClick: () => store.openFile(file),
   }, [
     h('span', { key: 'status', className: 'gw-status', style: { color: gwStatusColor(file.status) } }, file.status),
+    // 与 IDEA 一致：变更列表只显示文件名；完整路径由整行的 title 提供，
+    // 这里不再设 title，避免空目录时把上层的提示顶掉。
     h('span', { key: 'path', className: 'gw-path' }, [
-      split.dir === '' ? null : h('span', { key: 'dir', className: 'gw-dir' }, split.dir),
       h('span', { key: 'name', className: 'gw-name' }, split.name),
     ]),
     file.staged === true ? h('span', { key: 'staged', className: 'gw-branch-meta', title: tr('staged'), style: { opacity: 0.7 } }, '✓') : null,

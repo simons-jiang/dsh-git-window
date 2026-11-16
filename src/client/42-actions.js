@@ -92,7 +92,7 @@ function GwCommitDialog({ store, state, tr }) {
     h('div', { key: 'files', className: 'gw-dialog-files' }, dialog.files.map((file) => {
       const checked = dialog.selected.includes(file.path)
       const split = gwSplitPath(file.path)
-      return h('label', { key: file.path, className: 'gw-dialog-file' }, [
+      return h('label', { key: file.path, className: 'gw-dialog-file', title: file.path }, [
         h('input', {
           key: 'box',
           type: 'checkbox',
@@ -101,7 +101,6 @@ function GwCommitDialog({ store, state, tr }) {
         }),
         h('span', { key: 's', className: 'gw-status', style: { color: gwStatusColor(file.xy.replace(/\s/g, '')[0] ?? 'M') } }, file.xy.replace(/\s/g, '') || 'M'),
         h('span', { key: 'p', className: 'gw-path' }, [
-          h('span', { key: 'd', className: 'gw-dir' }, split.dir),
           h('span', { key: 'n', className: 'gw-name' }, split.name),
         ]),
       ])
