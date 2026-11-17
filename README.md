@@ -91,10 +91,16 @@ build.mjs              拼接源码、内联词条、生成 client.js
 test/api-test.mjs      Host API 自测（node test/api-test.mjs <repo>）
 ```
 
-## 交接
+## 安装
 
-接手开发（或在新会话里继续）先读 [HANDOFF.md](HANDOFF.md)：设计约定、架构、路由表、测试、已知边界、
-踩过的坑都在里面，不用翻历史对话。
+插件管理 → 添加插件 → 安装源选「自定义地址」，粘贴下面这行再点「安装」：
+
+```
+git+https://github.com/simons-jiang/dsh-git-window.git
+```
+
+装完在 Plugins 列表里启用即可，页面底部会出现「日志」工具窗（侧边栏底部的 Git 按钮随时开关）。
+不需要任何账号或 token；建议 DSH 版本与本仓库开发时一致（0.2.2-rc.3）。
 
 ## 发布
 
@@ -131,18 +137,6 @@ directories inside the profile's registered workspaces.
 用 `useWorkspaces` 的 snapshot 找到该会话所属工作区 → 取工作区路径 → 匹配已注册仓库。
 若该工作区不是 Git 仓库（例如 `杂项`），仓库保持不变。
 手动下拉选择会记作「当前项目的覆盖」，切换项目后自动恢复跟随。
-
-## 截图
-
-![Git 日志窗口](docs/screenshot.jpg)
-
-![跟随项目切换仓库](docs/screenshot-follow.jpg)
-
-![分支右键菜单](docs/screenshot-menu.jpg)
-
-![冲突处理窗口](docs/screenshot-merge.jpg)
-
-![冲突已解决](docs/screenshot-merge-resolved.jpg)
 
 ## 常见问题：仓库从哪来、账号、加新仓库
 

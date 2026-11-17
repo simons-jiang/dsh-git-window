@@ -9,15 +9,14 @@
 
 ---
 
-## 0. 先把这个目录变成公开仓库
+## 0. 仓库（已迁移到 GitHub）
 
-```bash
-cd dsh-git-window
-git init && git add -A
-git commit -m "feat: IDEA-style Git tool window for DeepSeek Harness"
-git branch -M main
-git remote add origin https://github.com/<owner>/<repo>.git
-git push -u origin main
+公开仓库：<https://github.com/simons-jiang/dsh-git-window>（`main`）。
+
+别人安装只需要在插件管理 → 添加插件里粘贴：
+
+```
+git+https://github.com/simons-jiang/dsh-git-window.git
 ```
 
 **必须满足的三件事**（CI 会逐条检查）：
@@ -27,15 +26,8 @@ git push -u origin main
 2. 仓库创建满 **1 天**（PR 前几分钟新建的会被自动拒）。
 3. 仓库加上 **`dsh-plugin`** topic（GitHub 仓库页 → About 齿轮 → Topics）。
 
-还要改两处名字（`@local/` 是私有前缀，公开仓库建议用无前缀包名）：
-
-| 文件 | 现在 | 改成 |
-|---|---|---|
-| `package.json` → `name` | `@local/dsh-git-window` | `dsh-git-window`（或 `@你的scope/dsh-git-window`） |
-| `cordis.patch.yml` → `insert[0].name` | `@local/dsh-git-window` | 同上 |
-
-> 你本机现在装的是 `@local/dsh-git-window` 的**链接包**，改名只发生在公开仓库那份副本上，
-> 不影响本机已装好的实例。两边独立。
+> 包名仍保留 `@local/dsh-git-window`：本机 profile 正以这个名字 link 安装，改名会让已装实例失效。
+> 从 GitHub 安装不受影响；要发 npm 时用 `scripts/prepare-publish.mjs` 生成一份改好名字的 `dist/`。
 
 ---
 
@@ -56,9 +48,9 @@ npm publish --access public    # scoped 包需要 --access public
   "name": "dsh-git-window",
   "version": "1.0.0",
   "description": "IDEA-style Git tool window for DeepSeek Harness",
-  "repository": { "type": "git", "url": "git+https://github.com/<owner>/<repo>.git" },
-  "homepage": "https://github.com/<owner>/<repo>#readme",
-  "bugs": "https://github.com/<owner>/<repo>/issues",
+  "repository": { "type": "git", "url": "git+https://github.com/simons-jiang/dsh-git-window.git" },
+  "homepage": "https://github.com/simons-jiang/dsh-git-window#readme",
+  "bugs": "https://github.com/simons-jiang/dsh-git-window/issues",
   "author": "<你的名字>",
   "license": "MIT"
 }
@@ -70,7 +62,7 @@ npm publish --access public    # scoped 包需要 --access public
 `tarball:` 指向它（资产名不要带版本号，否则下次发版就 404）：
 
 ```yaml
-tarball: https://github.com/<owner>/<repo>/releases/latest/download/dsh-git-window.tgz
+tarball: https://github.com/simons-jiang/dsh-git-window/releases/latest/download/dsh-git-window.tgz
 ```
 
 ```bash
@@ -84,28 +76,28 @@ gh release create v1.0.0 dsh-git-window-1.0.0.tgz   # 资产名建议重命名�
 
 Fork `awesome-dsh-plugin/awesome-dsh-plugin`，**只新增一个文件**（不要手改 README，它们是脚本生成的）：
 
-`data/plugins/<owner>__<repo>.yml`
+`data/plugins/simons-jiang__dsh-git-window.yml`
 
 ```yaml
-url: https://github.com/<owner>/<repo>
-name: <owner>/<repo>
+url: https://github.com/simons-jiang/dsh-git-window
+name: simons-jiang/dsh-git-window
 category: git
 description:
   en: IDEA-style Git tool window for DeepSeek Harness: commit graph, branches, per-commit files, a centre diff view, pull/commit/push from the branch menu, and a three-pane merge window for conflicts.
   zh: DeepSeek Harness 的 IDEA 风格 Git 工具窗：提交图、分支、每个提交的改动文件、中间的差异视图，分支右键可拉取/提交/推送，冲突有三栏合并窗口。
 # 可选：GitHub 托管的位图（png/jpg/webp），约 96px 显示；不写就用你的 GitHub 头像
-icon: https://raw.githubusercontent.com/<owner>/<repo>/main/docs/icon-180.png
+icon: https://raw.githubusercontent.com/simons-jiang/dsh-git-window/main/docs/icon-180.png
 ```
 
 要点：
 
-- 文件名 `<owner>__<repo>.yml`（两个下划线）；一个 PR **最多 3 条**条目。
+- 文件名 `simons-jiang__dsh-git-window.yml`（两个下划线）；一个 PR **最多 3 条**条目。
 - `description.en` 必填、必须**如实**（评审会拿描述对代码）；不要营销词；描述里出现 `: ` 要加引号。
 - `category` 选 `git`（可选值见 contributing 里的列表，选错不会被打回，维护者会改）。
 - **不要**在 yml 里写 `npm:`——npm 映射从 registry 自动采集，手写会被拒。
 - 官方 `@deepseek-ai/*` 包要用 `peerDependencies`（本插件不依赖任何官方包，不涉及）。
 
-PR 标题写 `Add <owner>/<repo>` 即可。CI 会按顺序检查：条目数 → `dsh.bundle` → 仓库年龄 → awesome-lint/站点构建；
+PR 标题写 `Add simons-jiang/dsh-git-window` 即可。CI 会按顺序检查：条目数 → `dsh.bundle` → 仓库年龄 → awesome-lint/站点构建；
 失败会指出具体要改什么，往同一分支推修复就行，不用重开 PR。需要人改时维护者会打 `held: author` 标签，
 改完留一条评论说明即可，标签不会自动消失（要人重新评审）。
 
@@ -113,12 +105,13 @@ PR 标题写 `Add <owner>/<repo>` 即可。CI 会按顺序检查：条目数 →
 
 ---
 
-## 3. 商店截图（已准备好）
+## 3. 商店截图（待补）
 
-仓库根目录放 `screenshots.json`（已存在），列出 1–8 张仓库内图片，路径相对该文件：
+为避免公开内部信息，仓库目前**不带截图**（原先的 `docs/*.jpg` 与 `screenshots.json` 已移除）。
+要上架时再补：在 `docs/` 放 1–8 张**脱敏**截图，并在仓库根放 `screenshots.json`：
 
 ```json
-["docs/screenshot.jpg", "docs/screenshot-follow.jpg", "docs/screenshot-menu.jpg", "docs/screenshot-merge.jpg", "docs/screenshot-merge-resolved.jpg"]
+["docs/screenshot.jpg", "docs/screenshot-merge.jpg"]
 ```
 
 规则：1–8 张；相对路径不能跳出插件目录；也可以用 GitHub 托管的 https 绝对地址；第三方图床会被拒。
@@ -136,6 +129,7 @@ PR 标题写 `Add <owner>/<repo>` 即可。CI 会按顺序检查：条目数 →
 把 SVG 转 PNG 一行命令即可（macOS）：
 
 ```bash
+mkdir -p docs
 sips -s format png -z 180 180 icon.svg --out docs/icon-180.png
 ```
 
@@ -161,7 +155,7 @@ npm publish && git push --follow-tags
 ```
 
 - 已发布过的版本号不可覆盖；发坏了只能发下一个版本。
-- 改了 UI 记得重跑 `node build.mjs`（`client.js` 是产物），并更新 `docs/` 里的截图。
+- 改了 UI 记得重跑 `node build.mjs`（`client.js` 是产物），并补/更新 `docs/` 下的**脱敏**截图。
 - 条目本身不需要改（url 不变）；描述里写了具体功能数量的话，功能变化要同步改描述。
 
 ---

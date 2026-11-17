@@ -2,3 +2,7 @@ node_modules/
 .DS_Store
 *.tgz
 dist/
+
+# 本机交接文档，不公开（含本机路径与内部上下文）
+HANDOFF.md
+private/

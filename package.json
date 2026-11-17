@@ -18,8 +18,6 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
-    "screenshots.json",
-    "docs",
     "PUBLISHING.md"
   ],
   "scripts": {
@@ -43,6 +41,12 @@
       ]
     }
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/simons-jiang/dsh-git-window.git"
+  },
+  "homepage": "https://github.com/simons-jiang/dsh-git-window#readme",
+  "bugs": "https://github.com/simons-jiang/dsh-git-window/issues",
   "license": "MIT",
   "keywords": [
     "dsh-plugin",
