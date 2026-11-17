@@ -39,6 +39,9 @@ const MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 /** Maximum bytes of one file diff sent to the browser. */
 const MAX_DIFF_BYTES = 2 * 1024 * 1024
 
+/** Context lines requested per file: the whole file, so the client renders a continuous view. */
+const DIFF_CONTEXT_LINES = 1000000
+
 /** Default and maximum `git log` page size. */
 const DEFAULT_LOG_LIMIT = 200
 const MAX_LOG_LIMIT = 1000
@@ -567,7 +570,7 @@ async function fileDiff(cwd, payload) {
   if (absolute !== root && !absolute.startsWith(root + sep)) {
     throw new RequestError('bad-path', 'path escapes the repository', 400)
   }
-  const common = ['--no-ext-diff', '--no-textconv', '--no-color', '--unified=3', '-M']
+  const common = ['--no-ext-diff', '--no-textconv', '--no-color', `--unified=${DIFF_CONTEXT_LINES}`, '-M']
   let args
   if (mode === 'worktree') {
     args = ['diff', ...common, '--', path]
@@ -585,7 +588,7 @@ async function fileDiff(cwd, payload) {
     const parentsText = (await gitText(root, ['rev-list', '--parents', '-n', '1', hash])).trim()
     const parents = parentsText.split(/\s+/).slice(1)
     args = parents.length === 0
-      ? ['show', '--format=', '--no-color', '--no-ext-diff', '--unified=3', '--root', hash, '--', path]
+      ? ['show', '--format=', '--no-color', '--no-ext-diff', `--unified=${DIFF_CONTEXT_LINES}`, '--root', hash, '--', path]
       : ['diff', ...common, `${hash}^1`, hash, '--', path]
   }
   const text = await gitText(root, args, { maxBytes: MAX_DIFF_BYTES })

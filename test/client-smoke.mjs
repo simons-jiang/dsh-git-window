@@ -352,6 +352,7 @@ check('layout.selectPanel called with the panel key', layoutSelectPanel === 'dsh
 const panelText2 = renderSeat('main')
 check('diff panel renders the file', panelText2.includes('revision') || panelText2.includes('pom.xml'), panelText2.slice(0, 160))
 check('diff panel has no raw keys', !panelText2.includes('sideBySide') && !panelText2.includes('unified'))
+check('diff renders as a continuous file (no hunk headers)', !panelText2.includes('@@') && panelText2.includes('revision'))
 
 // ---------------------------------------------------------------- context menu
 store.openMenu(120, 240, 'main')

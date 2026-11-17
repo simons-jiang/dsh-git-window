@@ -161,10 +161,11 @@ const GW_CSS = `
 .gw-dline .gw-sign{flex:0 0 14px;text-align:center;opacity:.65;user-select:none}
 .gw-dline .gw-code{padding:0 10px 0 2px;min-width:0}
 .gw-dline.placeholder{background:rgba(128,140,160,.045)}
-.gw-hunk{display:flex;align-items:center;gap:8px;height:20px;padding:0 10px;
-  background:rgba(74,136,255,.10);color:#8fb6ff;font-size:11px;border-top:1px solid rgba(74,136,255,.18);
-  border-bottom:1px solid rgba(74,136,255,.18);font-family:ui-monospace,monospace}
-.gw-hunk .gw-hunk-section{color:var(--dsw-alias-label-secondary,#9a9ea8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gw-gap{display:flex;align-items:center;justify-content:center;height:20px;
+  background:rgba(128,140,160,.07);color:var(--dsw-alias-label-secondary,#9a9ea8);font-size:11px;
+  cursor:pointer;user-select:none;border-top:1px solid rgba(128,140,160,.08);
+  border-bottom:1px solid rgba(128,140,160,.08);font-family:ui-monospace,monospace}
+.gw-gap:hover{background:rgba(128,140,160,.14);color:var(--dsw-alias-label-primary,#dfe1e5)}
 .gw-diffstates{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;
   color:var(--dsw-alias-label-secondary,#9a9ea8);font-size:12px}
 .gw-diffstates .gw-big{font-size:13px;color:var(--dsw-alias-label-primary,#dfe1e5)}

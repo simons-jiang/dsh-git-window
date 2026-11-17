@@ -417,10 +417,11 @@ const GW_CSS = `
 .gw-dline .gw-sign{flex:0 0 14px;text-align:center;opacity:.65;user-select:none}
 .gw-dline .gw-code{padding:0 10px 0 2px;min-width:0}
 .gw-dline.placeholder{background:rgba(128,140,160,.045)}
-.gw-hunk{display:flex;align-items:center;gap:8px;height:20px;padding:0 10px;
-  background:rgba(74,136,255,.10);color:#8fb6ff;font-size:11px;border-top:1px solid rgba(74,136,255,.18);
-  border-bottom:1px solid rgba(74,136,255,.18);font-family:ui-monospace,monospace}
-.gw-hunk .gw-hunk-section{color:var(--dsw-alias-label-secondary,#9a9ea8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gw-gap{display:flex;align-items:center;justify-content:center;height:20px;
+  background:rgba(128,140,160,.07);color:var(--dsw-alias-label-secondary,#9a9ea8);font-size:11px;
+  cursor:pointer;user-select:none;border-top:1px solid rgba(128,140,160,.08);
+  border-bottom:1px solid rgba(128,140,160,.08);font-family:ui-monospace,monospace}
+.gw-gap:hover{background:rgba(128,140,160,.14);color:var(--dsw-alias-label-primary,#dfe1e5)}
 .gw-diffstates{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;
   color:var(--dsw-alias-label-secondary,#9a9ea8);font-size:12px}
 .gw-diffstates .gw-big{font-size:13px;color:var(--dsw-alias-label-primary,#dfe1e5)}
@@ -1886,21 +1887,24 @@ function GwCode({ text, lang }) {
   )))
 }
 
+/** Unchanged rows shorter than this stay visible; longer runs collapse. */
+const GW_COLLAPSE_LINES = 12
+
 /**
- * Turn hunks into side-by-side blocks: header rows plus aligned pairs. Inside a
- * change block removed lines pair with added lines positionally, and the longer
- * side fills the remaining rows with an empty placeholder.
+ * Turn hunks into side-by-side rows. Inside a change block removed lines pair
+ * with added lines positionally, and the longer side fills the remaining rows
+ * with an empty placeholder. Hunk headers are deliberately not emitted: the
+ * host sends whole-file context, so the view reads as one continuous file.
  */
-function gwPairHunks(hunks) {
-  const blocks = []
+function gwPairRows(hunks) {
+  const rows = []
   for (const hunk of hunks) {
-    blocks.push({ kind: 'hunk', hunk })
     const lines = hunk.lines
     let index = 0
     while (index < lines.length) {
       const line = lines[index]
       if (line.type === ' ') {
-        blocks.push({ kind: 'row', left: line, right: line })
+        rows.push({ left: line, right: line })
         index += 1
         continue
       }
@@ -1917,15 +1921,54 @@ function gwPairHunks(hunks) {
         }
         const count = Math.max(removed.length, added.length)
         for (let offset = 0; offset < count; offset += 1) {
-          blocks.push({ kind: 'row', left: removed[offset] ?? null, right: added[offset] ?? null })
+          rows.push({ left: removed[offset] ?? null, right: added[offset] ?? null })
         }
         continue
       }
-      blocks.push({ kind: 'row', left: null, right: line })
+      rows.push({ left: null, right: line })
       index += 1
     }
   }
-  return blocks
+  return rows
+}
+
+/** Flatten hunks into unified rows (one line each). */
+function gwUnifiedRows(hunks) {
+  const rows = []
+  for (const hunk of hunks) {
+    for (const line of hunk.lines) rows.push({ line })
+  }
+  return rows
+}
+
+/**
+ * Collapse long unchanged runs into one gap row the reader can expand. Gap ids
+ * are assigned per run, so expanding one keeps the others stable.
+ */
+function gwCollapseRuns(rows, isContext, expanded) {
+  const out = []
+  let run = []
+  let gap = 0
+  const flush = () => {
+    if (run.length === 0) return
+    if (run.length > GW_COLLAPSE_LINES && !expanded.has(gap)) {
+      out.push({ kind: 'gap', count: run.length, id: gap })
+    } else {
+      for (const row of run) out.push({ kind: 'row', row })
+    }
+    gap += 1
+    run = []
+  }
+  for (const row of rows) {
+    if (isContext(row)) {
+      run.push(row)
+      continue
+    }
+    flush()
+    out.push({ kind: 'row', row })
+  }
+  flush()
+  return out
 }
 
 /** One side-by-side cell. */
@@ -1957,15 +2000,6 @@ function GwUnifiedLine({ line, lang }) {
   ])
 }
 
-/** Hunk header strip shared by both layouts. */
-function GwHunkHeader({ hunk }) {
-  const range = `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@`
-  return h('div', { className: 'gw-hunk', style: { gridColumn: '1 / -1' } }, [
-    h('span', { key: 'range' }, range),
-    hunk.section === '' ? null : h('span', { key: 'section', className: 'gw-hunk-section' }, hunk.section),
-  ])
-}
-
 /** Track the rendered width of an element's parent, for equal side-by-side halves. */
 function gwUseElementWidth(ref) {
   const [width, setWidth] = useState(0)
@@ -1982,39 +2016,51 @@ function gwUseElementWidth(ref) {
   return width
 }
 
-/** The diff body for one file in one revision. */
+/** The diff body for one file in one revision: one continuous file, IDEA style. */
 function GwDiffBody({ diff, mode }) {
   const lang = gwLangOf(diff.path)
   const gridRef = useRef(null)
   const containerWidth = gwUseElementWidth(gridRef)
   const half = Math.max(220, Math.floor(containerWidth / 2) - 1)
+  const [expanded, setExpanded] = useState(() => new Set())
+  useEffect(() => {
+    setExpanded(new Set())
+  }, [diff])
+  const reveal = (id) => setExpanded((current) => {
+    const next = new Set(current)
+    next.add(id)
+    return next
+  })
   return useMemo(() => {
+    const gapRow = (entry, key) => h('div', {
+      key,
+      className: 'gw-gap',
+      style: mode === 'unified' ? undefined : { gridColumn: '1 / -1' },
+      onClick: () => reveal(entry.id),
+    }, `⋯ ${entry.count} 行未修改`)
     if (mode === 'unified') {
-      const items = []
-      for (const hunk of diff.hunks) {
-        items.push(h(GwHunkHeader, { key: `h-${hunk.oldStart}-${hunk.newStart}`, hunk }))
-        hunk.lines.forEach((line, index) => {
-          items.push(h(GwUnifiedLine, { key: `l-${hunk.oldStart}-${index}`, line, lang }))
-        })
-      }
+      const entries = gwCollapseRuns(gwUnifiedRows(diff.hunks), (row) => row.line.type === ' ', expanded)
+      const items = entries.map((entry, index) => (entry.kind === 'gap'
+        ? gapRow(entry, `g-${entry.id}`)
+        : h(GwUnifiedLine, { key: `l-${index}`, line: entry.row.line, lang })))
       return h('div', { ref: gridRef, className: 'gw-diffgrid unified' }, items)
     }
-    const blocks = gwPairHunks(diff.hunks)
+    const entries = gwCollapseRuns(gwPairRows(diff.hunks), (row) => row.left !== null && row.left === row.right, expanded)
     const items = []
-    blocks.forEach((block, index) => {
-      if (block.kind === 'hunk') {
-        items.push(h(GwHunkHeader, { key: `h-${index}`, hunk: block.hunk }))
+    entries.forEach((entry, index) => {
+      if (entry.kind === 'gap') {
+        items.push(gapRow(entry, `g-${entry.id}`))
         return
       }
-      items.push(h(GwLine, { key: `l-${index}`, line: block.left, side: 'left', lang }))
-      items.push(h(GwLine, { key: `r-${index}`, line: block.right, side: 'right', lang }))
+      items.push(h(GwLine, { key: `l-${index}`, line: entry.row.left, side: 'left', lang }))
+      items.push(h(GwLine, { key: `r-${index}`, line: entry.row.right, side: 'right', lang }))
     })
     return h('div', {
       ref: gridRef,
       className: 'gw-diffgrid side',
       style: { gridTemplateColumns: `minmax(${half}px, max-content) minmax(${half}px, max-content)` },
     }, items)
-  }, [diff, mode, lang, half])
+  }, [diff, mode, lang, half, expanded])
 }
 
 // ---- 34-merge.js ---------------------------------------------------------
