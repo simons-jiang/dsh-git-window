@@ -172,7 +172,25 @@ check('abort clears conflicts', (aborted.body.value?.conflicts ?? []).length ===
 const afterAbort = await call('conflicts', { cwd: mine })
 check('abort leaves no merge in progress', afterAbort.body.value?.merging === false)
 
-// 11. Unknown/duplicate method names stay 404.
+// 11. Branch menu operations: checkout, rename, compare, merge, delete.
+git(mine, ['branch', 'feature/menu'])
+const switched = await call('checkout', { cwd: mine, branch: 'feature/menu' })
+check('checkout switches branch', switched.body.value?.repo?.branch === 'feature/menu', JSON.stringify(switched.body).slice(0, 200))
+await writeFile(join(mine, 'menu.txt'), 'menu\n')
+const menuCommit = await call('commitChanges', { cwd: mine, message: 'test: menu branch', paths: ['menu.txt'] })
+check('commit on the new branch', menuCommit.body.ok === true, JSON.stringify(menuCommit.body).slice(0, 200))
+const compared = await call('compare', { cwd: mine, base: 'main', head: 'feature/menu' })
+check('compare lists the branch file', (compared.body.value?.files ?? []).some((file) => file.path === 'menu.txt'), JSON.stringify(compared.body).slice(0, 260))
+const comparedDiff = await call('diff', { cwd: mine, mode: 'compare', base: 'main', head: 'feature/menu', path: 'menu.txt' })
+check('compare diff has hunks', (comparedDiff.body.value?.hunks ?? []).length > 0, JSON.stringify(comparedDiff.body).slice(0, 200))
+const backMain = await call('checkout', { cwd: mine, branch: 'main' })
+check('checkout back to main', backMain.body.value?.repo?.branch === 'main')
+const mergedBranch = await call('mergeBranch', { cwd: mine, branch: 'feature/menu' })
+check('merge reports success', mergedBranch.body.value?.status === 'ok', JSON.stringify(mergedBranch.body).slice(0, 200))
+const worktreeCompare = await call('compare', { cwd: mine, base: 'main' })
+check('compare against the working tree answers', Array.isArray(worktreeCompare.body.value?.files), JSON.stringify(worktreeCompare.body).slice(0, 200))
+
+// 12. Unknown/duplicate method names stay 404.
 const unknown = await call('nope', {})
 check('unknown method refused', unknown.status === 404)
 

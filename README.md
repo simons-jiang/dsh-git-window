@@ -26,12 +26,13 @@
   浅色主题下是不透明纯白，深色主题下自动变深；不使用 `--dsw-alias-bg-overlay`
   （浅色下是 `#e9ecf2` 的蓝灰，会和面板产生色差）。
 - **右键范围**：分支行、全部分支行、工具栏分支 chip、日志行、详情文件、空白区域右键都打开插件自己的菜单
-  （输入框保留系统菜单，方便粘贴）。
+  （输入框保留系统菜单，方便粘贴；菜单和对话框都可以按 `Esc` 关闭）。
 - **文案兜底**：所有 UI 文案走 `gwMakeTranslator` —— 先问 locale 服务，命中不了就用随包词条
   （按 locale 前缀选 zh/en），**任何情况下都不会把 `menuPull` 这类词条 key 露到界面上**。
-- **分支右键菜单**：在分支树的分支行（或工具栏上的分支 chip）上右键 →
-  **拉取代码 / 提交代码… / 推送代码 / 提交并推送代码**；存在冲突时多出「解决冲突…」，
-  合并进行中还有「中止合并」。
+- **分支右键菜单（对齐 IDEA）**：签出 / 与 '当前分支' 比较 / 显示与工作树的差异 /
+  将所选分支合并到 '当前分支' 中 / 更新 / 推送…；
+  底部另加「提交…」「提交并推送…」。存在冲突时多出「解决冲突…」，合并中还有「中止合并」。
+- **比较视图**：比较结果按文件列在右侧详情里，点文件在中间打开双引用差异（`base..head` 或 `base → 工作树`）。
 - **提交对话框**：提交信息 + 变更文件勾选（默认全选），按钮「提交 / 提交并推送」，
   `⌘/Ctrl+Enter` 直接提交。
 - **冲突处理窗口**：三列布局 `您未提交的更改 | 结果 | 远程更改`，每个冲突块两侧有 ◀ ▶，
@@ -58,16 +59,18 @@
   `status` / `rev-parse` / `rev-list` / `show` / `ls-files`），不碰 `user.name/user.email`。
 - **怎么写**（只有你点了菜单才会发生）：
   - 提交 = `git add -- <选中的文件>` + `git commit -m <消息>`；
-  - 拉取 = `git pull --no-rebase --no-edit`（「智能合并」= 先 `git stash push -u`，拉取后 `git stash pop`）；
+  - 更新 = `git pull --no-rebase --no-edit`（「智能合并」= 先 `git stash push -u`，拉取后 `git stash pop`）；
   - 推送 = `git push`（无上游时 `--set-upstream <唯一远端> <分支>`，**从不 force**）；
-  - 解冲突 = 写回结果 + `git add -- <文件>`；中止 = `git merge --abort`。
-  - 插件自身不执行 `fetch`、不改配置、不切分支、不 reset、不 rebase。
+  - 解冲突 = 写回结果 + `git add -- <文件>`；中止 = `git merge --abort`；
+  - 分支菜单 = `git checkout`（远程分支会建跟踪分支）/ `git merge --no-edit`。
+  - 插件自身不执行 `fetch`、不改 git 配置、不 reset、不删除/重命名分支、不改上游跟踪、不改写已推送的历史。
 - **凭据**：不存储、不读取任何密码/token/SSH key。`push`/`pull` 的认证完全交给系统 git
   （credential helper / SSH agent / macOS Keychain）；子进程带 `GIT_TERMINAL_PROMPT=0`，
   拿不到凭据会立刻失败并把 git 的原始报错显示在提示条里，而不是卡住等你输入。
 - **二进制冲突**：不会把解码后的字节写回文件；窗口会提示改在命令行解决。
-- 路由：`POST /dsh-git/api/{repos|log|branches|commit|diff|status}`，经 `connection.requestRejection`
-  做 Host/Origin 与浏览器凭据校验，未通过直接 403。
+- 路由：读 `POST /dsh-git/api/{repos|log|branches|commit|diff|status|compare}`，写
+  `{commitChanges|pull|push|resolve|abortMerge|checkout|mergeBranch}`；
+  全部经 `connection.requestRejection` 做 Host/Origin 与浏览器凭据校验，未通过直接 403。
 - 目录限定：请求里的 `cwd` 必须是某个已注册工作区目录本身或其中的子目录（`realpath` 规范化后判定），
   文件路径必须是仓库内相对路径，`..` 与绝对路径一律拒绝。
 - 输出用 `-z` / 分隔符 / `--no-color` / `core.quotePath=false` 解析，不依赖系统语言与配色。
@@ -189,4 +192,4 @@ fetch/pull/push 这类联网操作，而那些操作不在本插件范围内（�
   各列保留自己的行号；当某一侧在冲突之外还多/少了几行时，文本带内可能有 1–2 行错位（冲突本身不受影响）。
 - 「结果」列由「接受左侧/右侧」生成，不提供自由编辑（IDEA 可以在结果里直接打字）；需要手改时
   用「应用更改」写回后再在编辑器里改，或先在命令行解决。
-- 一次只处理一次 merge；rebase / cherry-pick 的冲突暂未接入同一个窗口。
+- 一次只处理一次 merge；不提供 rebase / cherry-pick，其它操作的冲突暂未接入同一个窗口。

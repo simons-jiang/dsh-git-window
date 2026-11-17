@@ -78,6 +78,9 @@ function GwDiffPanel({ store, t, translate }) {
     const onKeyDown = (event) => {
       if (event.key !== 'Escape') return
       if (event.defaultPrevented) return
+      const current = store.getState()
+      // A menu, dialog or merge window owns Escape while it is open.
+      if (current.menu !== null || current.dialog !== null || current.merge !== null) return
       event.preventDefault()
       store.showConversation()
     }
@@ -119,7 +122,14 @@ function GwDiffPanel({ store, t, translate }) {
       h('div', { key: 'crumbs', className: 'gw-crumbs' }, tab === undefined ? [] : h(GwCrumbs, { path: tab.file.path })),
       stats === null || stats.additions === 0 ? null : h('span', { key: 'add', className: 'gw-addstat' }, `+${stats.additions}`),
       stats === null || stats.deletions === 0 ? null : h('span', { key: 'del', className: 'gw-delstat' }, `-${stats.deletions}`),
-      tab === undefined ? null : h('span', { key: 'rev', className: 'gw-mono', style: { opacity: 0.7 } }, tab.file.mode === 'commit' ? gwShort(tab.file.hash) : (tab.file.mode === 'index' ? tr('staged') : tr('worktreeHint'))),
+      tab === undefined ? null : h('span', { key: 'rev', className: 'gw-mono', style: { opacity: 0.7 } },
+        tab.file.mode === 'commit' ? gwShort(tab.file.hash)
+          : tab.file.mode === 'index' ? tr('staged')
+            : tab.file.mode === 'compare'
+              ? (tab.file.head === null || tab.file.head === undefined
+                ? `${tab.file.base} → ${tr('worktreeHint')}`
+                : `${tab.file.base}..${tab.file.head}`)
+              : tr('worktreeHint')),
       state.diff?.binary === true ? null : h('div', { key: 'modes', className: 'gw-seg' }, [
         h('button', {
           key: 'side',

@@ -8,34 +8,61 @@
  * frame — anything absolute inside it would be cut off.
  */
 
-/** Menu rows for one branch: the four git writes plus conflict recovery. */
+/**
+ * Menu rows for one branch, in IntelliJ's order: checkout, compare, show diff
+ * with the working tree, merge it into current, update, push — then the two
+ * commit shortcuts this window adds. Rebase, rename, delete and upstream
+ * edits are deliberately not offered: this window never rewrites history or
+ * removes branches.
+ */
 function gwMenuItems(state, tr) {
-  const repo = state.repo
-  const branch = state.menu?.branch ?? null
+  const selected = state.menu?.branch ?? ''
+  const remote = state.menu?.remote === true
+  const current = state.repoInfo?.branch ?? ''
+  const noRepo = state.repo === null
+  const busy = state.busy !== null
+  const canCompare = selected !== '' && current !== '' && selected !== current
   const items = [
-    { id: 'pull', label: tr('menuPull'), hint: tr('menuPullHint'), run: () => state.store.pull() },
-    { id: 'commit', label: tr('menuCommit'), hint: tr('menuCommitHint'), run: () => state.store.startCommit(false) },
-    { id: 'push', label: tr('menuPush'), hint: tr('menuPushHint'), run: () => state.store.push() },
-    { id: 'commit-push', label: tr('menuCommitPush'), hint: tr('menuCommitPushHint'), run: () => state.store.startCommit(true) },
+    { id: 'checkout', label: tr('menuCheckout'), hint: tr('menuCheckoutHint'), disabled: noRepo || busy || selected === '' || (!remote && selected === current), run: () => state.store.checkout(selected, remote) },
+    { id: 'compare', label: tr('menuCompareWith').replace('{ref}', current), hint: tr('menuCompareHint'), disabled: noRepo || busy || !canCompare, run: () => state.store.compareWith(current, selected, tr('compareTitle').replace('{ref}', selected)) },
+    { id: 'worktree', label: tr('menuWorktreeDiff'), hint: tr('menuWorktreeDiffHint'), disabled: noRepo || busy || selected === '', run: () => state.store.compareWith(selected, null, tr('compareWorktreeTitle').replace('{ref}', selected)) },
+    { id: 'merge', label: tr('menuMergeInto').replace('{ref}', selected).replace('{current}', current), hint: tr('menuMergeHint'), disabled: noRepo || busy || !canCompare, run: () => state.store.mergeBranch(selected) },
+    { id: 'sep-writes', separator: true },
+    { id: 'update', label: tr('menuUpdate'), hint: tr('menuUpdateHint'), disabled: noRepo || busy || current === '' || selected !== current, run: () => state.store.pull() },
+    { id: 'push', label: tr('menuPush'), hint: tr('menuPushHint'), disabled: noRepo || busy || current === '' || selected !== current, run: () => state.store.push() },
   ]
   if (state.conflictCount > 0 || state.mergeInProgress === true) {
-    items.push({ id: 'resolve', label: tr('menuResolve'), hint: tr('menuResolveHint'), run: () => state.store.openMerge() })
+    items.push({ id: 'sep-conflicts', separator: true })
+    items.push({ id: 'resolve', label: tr('menuResolve'), hint: tr('menuResolveHint'), disabled: busy, run: () => state.store.openMerge() })
   }
   if (state.mergeInProgress === true) {
-    items.push({ id: 'abort', label: tr('menuAbortMerge'), hint: tr('menuAbortMergeHint'), run: () => state.store.abortMerge() })
+    items.push({ id: 'abort', label: tr('menuAbortMerge'), hint: tr('menuAbortMergeHint'), disabled: busy, run: () => state.store.abortMerge() })
   }
-  if (repo === null) return items.map((item) => ({ ...item, disabled: true }))
-  return items.map((item) => ({ ...item, branch }))
+  items.push({ id: 'sep-commit', separator: true })
+  items.push({ id: 'commit', label: tr('menuCommit'), hint: tr('menuCommitHint'), disabled: noRepo || busy, run: () => state.store.startCommit() })
+  items.push({ id: 'commit-push', label: tr('menuCommitPush'), hint: tr('menuCommitPushHint'), disabled: noRepo || busy, run: () => state.store.startCommit() })
+  return items
 }
 
 /** Branch context menu. */
 function GwContextMenu({ store, state, tr }) {
   const menu = state.menu
   const items = gwMenuItems({ ...state, store }, tr)
-  const width = 236
-  const height = 12 + items.length * 30 + 10
+  const width = 286
+  const rowHeight = (item) => (item.separator === true ? 9 : 30)
+  const height = 12 + items.reduce((sum, item) => sum + rowHeight(item), 0) + 10
   const left = Math.max(8, Math.min(menu.x, (globalThis.innerWidth || 1200) - width - 8))
-  const top = Math.max(8, Math.min(menu.y, (globalThis.innerHeight || 800) - height - 8))
+  const top = Math.max(8, Math.min(menu.y, (globalThis.innerHeight || 800) - Math.min(height, 640) - 8))
+  const renderItem = (item) => {
+    if (item.separator === true) return h('div', { key: item.id, className: 'gw-menu-sep' })
+    return h('button', {
+      key: item.id,
+      className: 'gw-menu-item',
+      disabled: item.disabled === true,
+      title: item.hint,
+      onClick: () => item.run(),
+    }, item.label)
+  }
   return [
     h('div', {
       key: 'backdrop',
@@ -43,18 +70,16 @@ function GwContextMenu({ store, state, tr }) {
       onMouseDown: () => store.closeMenu(),
       onContextMenu: (event) => { event.preventDefault(); store.closeMenu() },
     }),
-    h('div', { key: 'menu', className: 'gw-menu', style: { left: `${left}px`, top: `${top}px`, width: `${width}px` } }, [
+    h('div', {
+      key: 'menu',
+      className: 'gw-menu',
+      style: { left: `${left}px`, top: `${top}px`, width: `${width}px`, maxHeight: '640px', overflowY: 'auto' },
+    }, [
       h('div', { key: 'head', className: 'gw-menu-head' }, [
         h(GwBranchIcon, { key: 'i', size: 11 }),
         h('span', { key: 'n', className: 'gw-menu-branch', title: menu.branch ?? '' }, menu.branch ?? tr('allBranches')),
       ]),
-      items.map((item) => h('button', {
-        key: item.id,
-        className: 'gw-menu-item',
-        disabled: item.disabled === true || state.busy !== null,
-        title: item.hint,
-        onClick: () => item.run(),
-      }, item.label)),
+      items.map(renderItem),
     ]),
   ]
 }
@@ -142,6 +167,7 @@ function GwNotice({ store, state, tr }) {
     .replace('{hash}', notice.params?.hash ?? '')
     .replace('{count}', String(notice.params?.count ?? ''))
     .replace('{upstream}', notice.params?.upstream ?? '')
+    .replace('{branch}', notice.params?.branch ?? '')
   return h('div', { className: `gw-notice ${tone}`, role: 'status' }, [
     h('span', { key: 't', className: 'gw-notice-text', title: notice.params?.detail ?? '' }, text),
     notice.params?.detail === undefined ? null : h('pre', { key: 'd', className: 'gw-notice-detail' }, notice.params.detail),
@@ -153,6 +179,26 @@ function GwNotice({ store, state, tr }) {
 function GwOverlay({ store, t, translate }) {
   const tr = typeof translate === 'function' ? translate : (t ?? ((key) => key))
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState)
+  // Escape dismisses whatever floating surface is on top: a dialog first, then
+  // the branch menu. It never reaches the centre panel's own Escape handler,
+  // which would otherwise leave the diff while only trying to close the menu.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return
+      if (state.dialog !== null) {
+        event.preventDefault()
+        store.closeDialog()
+        return
+      }
+      if (state.menu !== null) {
+        event.preventDefault()
+        store.closeMenu()
+      }
+    }
+    if (typeof window === 'undefined') return undefined
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [store, state.menu, state.dialog])
   const layers = [h(GwStyle, { key: 'style' })]
   if (state.busy !== null) {
     layers.push(h('div', { key: 'busy', className: 'gw-busy', role: 'status' }, [

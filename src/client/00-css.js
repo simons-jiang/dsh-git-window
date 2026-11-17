@@ -203,6 +203,8 @@ const GW_CSS = `
   background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
 .gw-menu-item:hover:not([disabled]){background:rgba(128,140,160,.16)}
 .gw-menu-item[disabled]{opacity:.45;cursor:default}
+.gw-menu-label{display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:248px;vertical-align:middle}
+.gw-menu-sep{height:1px;margin:4px 6px;background:var(--dsw-alias-border-l1,#0000000a)}
 
 .gw-dialog{position:fixed;z-index:2147483001;top:50%;left:50%;transform:translate(-50%,-50%);
   width:min(560px,90vw);max-height:78vh;display:flex;flex-direction:column;gap:8px;padding:14px;

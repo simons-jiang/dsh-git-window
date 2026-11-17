@@ -173,7 +173,8 @@ function gwRepoForPath(repos, path) {
 
 /** Tab identity for one file in one revision. */
 function gwTabId(file) {
-  return `${file.mode}:${file.hash ?? ''}:${file.path}`
+  const revision = file.mode === 'compare' ? `${file.base ?? ''}..${file.head ?? ''}` : (file.hash ?? '')
+  return `${file.mode}:${revision}:${file.path}`
 }
 
 /**
@@ -501,6 +502,8 @@ function gwCreateStore(layoutRef) {
         hash: tab.file.hash,
         path: tab.file.path,
         mode: tab.file.mode,
+        base: tab.file.base,
+        head: tab.file.head,
       })
       if (token !== diffToken) return
       const tabs = state.tabs.map((entry) => (entry.id === tab.id ? { ...entry, diff: value } : entry))
@@ -634,8 +637,8 @@ function gwCreateStore(layoutRef) {
   }
 
   /** Open the branch context menu at the pointer. */
-  function openMenu(x, y, branch) {
-    patch({ menu: { x, y, branch } })
+  function openMenu(x, y, branch, remote) {
+    patch({ menu: { x, y, branch, remote: remote === true } })
   }
 
   function closeMenu() {
@@ -764,6 +767,73 @@ function gwCreateStore(layoutRef) {
         notifyGitError(error)
       }
     })
+  }
+
+  /** Switch to a branch (a remote one becomes a local tracking branch). */
+  async function checkout(branch, remote) {
+    const repo = state.repo
+    if (repo === null) return
+    await runAction('checkout', async () => {
+      try {
+        const value = await gwCall('checkout', { cwd: repo.path, branch, remote: remote === true })
+        notify('ok', 'checkoutDone', { branch: value?.branch ?? branch })
+        layoutRef.current?.selectPanel?.(null)
+        patch({
+          ref: null, selected: null, detail: null, files: [], tabs: [], activeTabId: null, diff: null,
+        })
+        await reload()
+      } catch (error) {
+        notifyGitError(error)
+      }
+    })
+  }
+
+  /** Merge one branch into the checked-out one; conflicts open the merge window. */
+  async function mergeBranch(branch) {
+    const repo = state.repo
+    if (repo === null) return
+    await runAction('merge', async () => {
+      try {
+        const value = await gwCall('mergeBranch', { cwd: repo.path, branch })
+        if (value?.status === 'conflicts') {
+          notify('warn', 'pullConflicts', { count: (value.conflicts ?? []).length })
+          await reload()
+          await openMerge()
+          return
+        }
+        notify('ok', 'mergeDone', { branch })
+        await reload()
+      } catch (error) {
+        notifyGitError(error)
+      }
+    })
+  }
+
+  /** Show the changed files between two refs (or one ref and the working tree). */
+  async function compareWith(base, head, title) {
+    const repo = state.repo
+    if (repo === null) return
+    const token = ++detailToken
+    patch({ selected: { kind: 'compare', base, head, title }, detail: null, detailLoading: true, files: [] })
+    try {
+      const value = await gwCall('compare', { cwd: repo.path, base, head: head ?? undefined })
+      if (token !== detailToken) return
+      const files = (value?.files ?? []).map((file) => ({
+        path: file.path,
+        oldPath: file.oldPath,
+        status: file.status,
+        mode: 'compare',
+        base,
+        head: head ?? null,
+        additions: file.additions,
+        deletions: file.deletions,
+        binary: file.binary,
+      }))
+      patch({ detailLoading: false, detail: { kind: 'compare', ...value, title }, files })
+    } catch (error) {
+      if (token !== detailToken) return
+      patch({ detailLoading: false, detail: null, files: [], logError: error })
+    }
   }
 
   /** Read every conflicted file the window needs for the first one. */
@@ -991,6 +1061,9 @@ function gwCreateStore(layoutRef) {
     closeDialog,
     push,
     pull,
+    checkout,
+    mergeBranch,
+    compareWith,
     openMerge,
     selectMergeFile,
     focusConflict,

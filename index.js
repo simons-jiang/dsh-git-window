@@ -558,7 +558,7 @@ async function untrackedDiff(root, path) {
 async function fileDiff(cwd, payload) {
   const root = (await gitText(cwd, ['rev-parse', '--show-toplevel'])).trim()
   if (root === '') throw new RequestError(NOT_REPO, 'not a git repository', 409)
-  const mode = payload.mode === 'index' || payload.mode === 'worktree' ? payload.mode : 'commit'
+  const mode = payload.mode === 'index' || payload.mode === 'worktree' || payload.mode === 'compare' ? payload.mode : 'commit'
   const path = String(payload.path ?? '')
   if (path === '' || isAbsolute(path) || path.includes('\0') || path.split('/').includes('..')) {
     throw new RequestError('bad-path', 'path must be repository-relative', 400)
@@ -573,6 +573,12 @@ async function fileDiff(cwd, payload) {
     args = ['diff', ...common, '--', path]
   } else if (mode === 'index') {
     args = ['diff', '--cached', ...common, '--', path]
+  } else if (mode === 'compare') {
+    const base = admitRef(payload.base, 'base ref')
+    const head = payload.head === null || payload.head === undefined ? undefined : admitRef(payload.head, 'head ref')
+    args = head === undefined
+      ? ['diff', ...common, base, '--', path]
+      : ['diff', ...common, base, head, '--', path]
   } else {
     const hash = String(payload.hash ?? '')
     if (!/^[0-9a-f]{4,40}$/i.test(hash)) throw new RequestError('bad-request', 'hash is required', 400)
@@ -859,6 +865,110 @@ async function abortMerge(cwd) {
   return { conflicts: await unmergedPaths(root) }
 }
 
+/** Validate one ref name handed to git as a single argument. */
+function admitRef(name, label) {
+  const text = String(name ?? '')
+  if (text === '' || text.startsWith('-') || /[\s\0]/.test(text) || text.includes('..') || text.startsWith('/')) {
+    throw new RequestError('bad-ref', `${label} is not a valid ref name`, 400)
+  }
+  return text
+}
+
+/** Switch to a local branch, or create a tracking branch from a remote one. */
+async function checkoutBranch(cwd, payload) {
+  const root = (await gitText(cwd, ['rev-parse', '--show-toplevel'])).trim()
+  if (root === '') throw new RequestError(NOT_REPO, 'not a git repository', 409)
+  const branch = admitRef(payload.branch, 'branch')
+  const remote = payload.remote === true
+  let short = branch
+  if (remote) {
+    const slash = branch.indexOf('/')
+    short = slash < 0 ? branch : branch.slice(slash + 1)
+  }
+  admitRef(short, 'branch')
+  const exists = (await runGit(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${short}`], { allowFailure: true, timeoutMs: 5000 })).code === 0
+  const args = remote
+    ? (exists ? ['checkout', short] : ['checkout', '-b', short, '--track', branch])
+    : ['checkout', branch]
+  const result = await gitOrThrow(root, args, { timeoutMs: 60000 })
+  return { branch: short, output: `${result.stdout}${result.stderr}`.trim(), repo: await repositoryInfo(root) }
+}
+
+/** Merge one branch into the current one, reporting conflicts. */
+async function mergeIntoCurrent(cwd, payload) {
+  const root = (await gitText(cwd, ['rev-parse', '--show-toplevel'])).trim()
+  if (root === '') throw new RequestError(NOT_REPO, 'not a git repository', 409)
+  const branch = admitRef(payload.branch, 'branch')
+  const result = await runGit(root, ['merge', '--no-edit', branch], { allowFailure: true, timeoutMs: 180000 })
+  const conflicts = await unmergedPaths(root)
+  const output = `${result.stdout}${result.stderr}`.trim()
+  if (result.code === 0 && conflicts.length === 0) {
+    return { status: 'ok', conflicts: [], output, repo: await repositoryInfo(root) }
+  }
+  if (conflicts.length > 0) {
+    return { status: 'conflicts', conflicts, output, repo: await repositoryInfo(root) }
+  }
+  throw new RequestError('merge-failed', output.split('\n').slice(0, 6).join(' ') || `git merge exited ${result.code}`, 409)
+}
+
+/** Changed files between two refs, or between one ref and the working tree. */
+async function compareRefs(cwd, payload) {
+  const root = (await gitText(cwd, ['rev-parse', '--show-toplevel'])).trim()
+  if (root === '') throw new RequestError(NOT_REPO, 'not a git repository', 409)
+  const base = admitRef(payload.base, 'base ref')
+  const head = payload.head === null || payload.head === undefined ? undefined : admitRef(payload.head, 'head ref')
+  const nameArgs = ['diff', '--name-status', '-M', '-z', '--no-color', base]
+  const numArgs = ['diff', '--numstat', '-M', '-z', '--no-color', base]
+  if (head !== undefined) {
+    nameArgs.push(head)
+    numArgs.push(head)
+  }
+  const [nameStatus, numStat] = await Promise.all([
+    gitText(root, nameArgs),
+    gitText(root, numArgs),
+  ])
+  const statMap = new Map()
+  for (const record of splitRecords(numStat, '\0')) {
+    const parts = record.split('\t')
+    if (parts.length < 3) continue
+    const path = parts.slice(2).join('\t')
+    statMap.set(path, parts[0] === '-'
+      ? { binary: true }
+      : { additions: Number(parts[0]) || 0, deletions: Number(parts[1]) || 0 })
+  }
+  const records = splitRecords(nameStatus, '\0')
+  const files = []
+  for (let index = 0; index < records.length; index += 1) {
+    const status = records[index]
+    if (status.length === 0 || /^[0-9]+$/.test(status)) continue
+    const letter = status[0]
+    const first = records[index + 1]
+    if (first === undefined) break
+    const paired = letter === 'R' || letter === 'C'
+    const path = paired ? records[index + 2] : first
+    const oldPath = paired ? first : undefined
+    index += paired ? 2 : 1
+    if (path === undefined) break
+    const stats = statMap.get(path) ?? (oldPath === undefined ? undefined : statMap.get(oldPath))
+    files.push({
+      path,
+      oldPath,
+      status: letter,
+      binary: stats !== undefined && 'binary' in stats ? true : undefined,
+      additions: stats !== undefined && 'additions' in stats ? stats.additions : undefined,
+      deletions: stats !== undefined && 'deletions' in stats ? stats.deletions : undefined,
+    })
+  }
+  files.sort((left, right) => left.path.localeCompare(right.path))
+  let additions = 0
+  let deletions = 0
+  for (const file of files) {
+    if (file.additions !== undefined) additions += file.additions
+    if (file.deletions !== undefined) deletions += file.deletions
+  }
+  return { base, head: head ?? null, files, additions, deletions, repo: await repositoryInfo(root) }
+}
+
 /** Registered Workspaces that are Git repositories, most recently used first. */
 async function repositoryList(ctx) {
   const registry = ctx.get('workspaceRegistry')
@@ -987,6 +1097,15 @@ const METHODS = {
   },
   async abortMerge(ctx, payload) {
     return abortMerge(await admitCwd(ctx, payload.cwd))
+  },
+  async checkout(ctx, payload) {
+    return checkoutBranch(await admitCwd(ctx, payload.cwd), payload)
+  },
+  async mergeBranch(ctx, payload) {
+    return mergeIntoCurrent(await admitCwd(ctx, payload.cwd), payload)
+  },
+  async compare(ctx, payload) {
+    return compareRefs(await admitCwd(ctx, payload.cwd), payload)
   },
   async status(ctx, payload) {
     const cwd = await admitCwd(ctx, payload.cwd)

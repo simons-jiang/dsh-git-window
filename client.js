@@ -50,14 +50,12 @@ window.__ModuleLoader__.load({
     "showWindow": "Show the Git log window",
     "hideWindow": "Hide the Git log window",
     "loadMore": "Load older commits",
-    "menuPull": "Pull",
-    "menuPullHint": "Fetch and merge the upstream branch",
-    "menuPush": "Push",
-    "menuPushHint": "Push the current branch to its upstream",
+    "menuPush": "Push…",
+    "menuPushHint": "Push the current branch to its upstream (current branch only)",
     "menuCommit": "Commit…",
     "menuCommitHint": "Open the commit dialog",
-    "menuCommitPush": "Commit and push",
-    "menuCommitPushHint": "Commit, then push immediately",
+    "menuCommitPush": "Commit and Push…",
+    "menuCommitPushHint": "Commit, then push right away from the commit dialog",
     "menuResolve": "Resolve conflicts…",
     "menuResolveHint": "Open the merge window",
     "menuAbortMerge": "Abort merge",
@@ -116,6 +114,21 @@ window.__ModuleLoader__.load({
     "mergeBinary": "Binary conflict",
     "mergeBinaryHint": "Resolve this file from the command line: the merge window only edits text.",
     "binaryTag": "binary",
+    "menuCheckout": "Checkout",
+    "menuCheckoutHint": "Switch to this branch",
+    "menuCompareWith": "Compare with '{ref}'",
+    "menuCompareHint": "List the changed files against the current branch",
+    "menuWorktreeDiff": "Show Diff with Working Tree",
+    "menuWorktreeDiffHint": "Compare this branch with the uncommitted changes",
+    "menuMergeInto": "Merge '{ref}' into '{current}'",
+    "menuMergeHint": "Merge the selected branch into the current one",
+    "menuUpdate": "Update",
+    "menuUpdateHint": "Pull the upstream and merge (current branch only)",
+    "checkoutDone": "Switched to {branch}",
+    "mergeDone": "Merged {branch}",
+    "compareTitle": "Compare with '{ref}'",
+    "compareWorktreeTitle": "Diff with working tree: '{ref}'",
+    "busy-checkout": "Switching branch…",
   }
   const GW_TEXT_ZH = {
     "log": "日志",
@@ -159,14 +172,12 @@ window.__ModuleLoader__.load({
     "showWindow": "显示 Git 日志窗口",
     "hideWindow": "隐藏 Git 日志窗口",
     "loadMore": "加载更早的提交",
-    "menuPull": "拉取代码",
-    "menuPullHint": "从上游分支拉取并合并",
-    "menuPush": "推送代码",
-    "menuPushHint": "把当前分支推送到上游",
-    "menuCommit": "提交代码…",
+    "menuPush": "推送…",
+    "menuPushHint": "把当前分支推送到上游（仅当前分支）",
+    "menuCommit": "提交…",
     "menuCommitHint": "打开提交对话框",
-    "menuCommitPush": "提交并推送代码",
-    "menuCommitPushHint": "提交后立即推送",
+    "menuCommitPush": "提交并推送…",
+    "menuCommitPushHint": "在提交对话框里提交后立刻推送",
     "menuResolve": "解决冲突…",
     "menuResolveHint": "打开冲突处理窗口",
     "menuAbortMerge": "中止合并",
@@ -225,6 +236,21 @@ window.__ModuleLoader__.load({
     "mergeBinary": "二进制文件冲突",
     "mergeBinaryHint": "请在命令行解决该文件：合并窗口只能处理文本。",
     "binaryTag": "二进制",
+    "menuCheckout": "签出",
+    "menuCheckoutHint": "切换到该分支",
+    "menuCompareWith": "与 '{ref}' 比较",
+    "menuCompareHint": "以当前分支为基准，查看文件差异",
+    "menuWorktreeDiff": "显示与工作树的差异",
+    "menuWorktreeDiffHint": "比较该分支与未提交的改动",
+    "menuMergeInto": "将 '{ref}' 合并到 '{current}' 中",
+    "menuMergeHint": "把所选分支合并进当前分支",
+    "menuUpdate": "更新",
+    "menuUpdateHint": "拉取上游并合并（仅当前分支）",
+    "checkoutDone": "已切换到 {branch}",
+    "mergeDone": "已合并 {branch}",
+    "compareTitle": "与 '{ref}' 比较",
+    "compareWorktreeTitle": "与 '{ref}' 的差异",
+    "busy-checkout": "正在切换分支…",
   }
 
 // ---- 00-css.js -----------------------------------------------------------
@@ -433,6 +459,8 @@ const GW_CSS = `
   background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
 .gw-menu-item:hover:not([disabled]){background:rgba(128,140,160,.16)}
 .gw-menu-item[disabled]{opacity:.45;cursor:default}
+.gw-menu-label{display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:248px;vertical-align:middle}
+.gw-menu-sep{height:1px;margin:4px 6px;background:var(--dsw-alias-border-l1,#0000000a)}
 
 .gw-dialog{position:fixed;z-index:2147483001;top:50%;left:50%;transform:translate(-50%,-50%);
   width:min(560px,90vw);max-height:78vh;display:flex;flex-direction:column;gap:8px;padding:14px;
@@ -708,7 +736,8 @@ function gwRepoForPath(repos, path) {
 
 /** Tab identity for one file in one revision. */
 function gwTabId(file) {
-  return `${file.mode}:${file.hash ?? ''}:${file.path}`
+  const revision = file.mode === 'compare' ? `${file.base ?? ''}..${file.head ?? ''}` : (file.hash ?? '')
+  return `${file.mode}:${revision}:${file.path}`
 }
 
 /**
@@ -1036,6 +1065,8 @@ function gwCreateStore(layoutRef) {
         hash: tab.file.hash,
         path: tab.file.path,
         mode: tab.file.mode,
+        base: tab.file.base,
+        head: tab.file.head,
       })
       if (token !== diffToken) return
       const tabs = state.tabs.map((entry) => (entry.id === tab.id ? { ...entry, diff: value } : entry))
@@ -1169,8 +1200,8 @@ function gwCreateStore(layoutRef) {
   }
 
   /** Open the branch context menu at the pointer. */
-  function openMenu(x, y, branch) {
-    patch({ menu: { x, y, branch } })
+  function openMenu(x, y, branch, remote) {
+    patch({ menu: { x, y, branch, remote: remote === true } })
   }
 
   function closeMenu() {
@@ -1299,6 +1330,73 @@ function gwCreateStore(layoutRef) {
         notifyGitError(error)
       }
     })
+  }
+
+  /** Switch to a branch (a remote one becomes a local tracking branch). */
+  async function checkout(branch, remote) {
+    const repo = state.repo
+    if (repo === null) return
+    await runAction('checkout', async () => {
+      try {
+        const value = await gwCall('checkout', { cwd: repo.path, branch, remote: remote === true })
+        notify('ok', 'checkoutDone', { branch: value?.branch ?? branch })
+        layoutRef.current?.selectPanel?.(null)
+        patch({
+          ref: null, selected: null, detail: null, files: [], tabs: [], activeTabId: null, diff: null,
+        })
+        await reload()
+      } catch (error) {
+        notifyGitError(error)
+      }
+    })
+  }
+
+  /** Merge one branch into the checked-out one; conflicts open the merge window. */
+  async function mergeBranch(branch) {
+    const repo = state.repo
+    if (repo === null) return
+    await runAction('merge', async () => {
+      try {
+        const value = await gwCall('mergeBranch', { cwd: repo.path, branch })
+        if (value?.status === 'conflicts') {
+          notify('warn', 'pullConflicts', { count: (value.conflicts ?? []).length })
+          await reload()
+          await openMerge()
+          return
+        }
+        notify('ok', 'mergeDone', { branch })
+        await reload()
+      } catch (error) {
+        notifyGitError(error)
+      }
+    })
+  }
+
+  /** Show the changed files between two refs (or one ref and the working tree). */
+  async function compareWith(base, head, title) {
+    const repo = state.repo
+    if (repo === null) return
+    const token = ++detailToken
+    patch({ selected: { kind: 'compare', base, head, title }, detail: null, detailLoading: true, files: [] })
+    try {
+      const value = await gwCall('compare', { cwd: repo.path, base, head: head ?? undefined })
+      if (token !== detailToken) return
+      const files = (value?.files ?? []).map((file) => ({
+        path: file.path,
+        oldPath: file.oldPath,
+        status: file.status,
+        mode: 'compare',
+        base,
+        head: head ?? null,
+        additions: file.additions,
+        deletions: file.deletions,
+        binary: file.binary,
+      }))
+      patch({ detailLoading: false, detail: { kind: 'compare', ...value, title }, files })
+    } catch (error) {
+      if (token !== detailToken) return
+      patch({ detailLoading: false, detail: null, files: [], logError: error })
+    }
   }
 
   /** Read every conflicted file the window needs for the first one. */
@@ -1526,6 +1624,9 @@ function gwCreateStore(layoutRef) {
     closeDialog,
     push,
     pull,
+    checkout,
+    mergeBranch,
+    compareWith,
     openMerge,
     selectMergeFile,
     focusConflict,
@@ -2439,10 +2540,10 @@ function GwDock({ store, t, translate, useWorkspaces }) {
   const localBranches = refTree.local.filter((branch) => branch.name !== '')
   const remoteBranches = refTree.remote.filter((branch) => !branch.name.endsWith('/HEAD'))
 
-  const openBranchMenu = (event, name) => {
+  const openBranchMenu = (event, name, remote) => {
     event.preventDefault()
     event.stopPropagation()
-    store.openMenu(event.clientX, event.clientY, name)
+    store.openMenu(event.clientX, event.clientY, name, remote)
   }
 
   const renderBranch = (branch, kind) => h('div', {
@@ -2450,7 +2551,7 @@ function GwDock({ store, t, translate, useWorkspaces }) {
     className: `gw-tree-row${branch.name === state.ref ? ' active' : ''}${branch.head === '*' ? ' head' : ''}`,
     title: `${branch.name}\n${tr('menuHint')}`,
     onClick: () => { void store.selectRef(branch.name === state.ref ? null : branch.name) },
-    onContextMenu: (event) => openBranchMenu(event, branch.name),
+    onContextMenu: (event) => openBranchMenu(event, branch.name, kind === 'remote'),
   }, [
     h('span', { key: 'icon', style: { color: branch.head === '*' ? 'var(--dsw-alias-brand-primary, #4a88ff)' : 'inherit', display: 'inline-flex' } }, h(GwBranchIcon, { size: 11 })),
     h('span', { key: 'name', className: 'gw-branch-name' }, branch.name),
@@ -2674,33 +2775,44 @@ function GwCommitDetails({ store, state, tr }) {
     return h('div', { className: 'gw-empty' }, tr('selectCommit'))
   }
   const worktree = state.selected.kind === 'worktree'
+  const compare = state.selected.kind === 'compare'
   const detail = state.detail
-  const subject = worktree ? tr('localChanges') : (detail?.subject ?? '')
+  const subject = compare
+    ? (detail?.title ?? tr('compareTitle').replace('{ref}', String(state.selected.base ?? '')))
+    : (worktree ? tr('localChanges') : (detail?.subject ?? ''))
   const hash = worktree ? '' : (detail?.hash ?? '')
   const author = worktree ? '' : (detail?.author ?? '')
   const time = worktree ? 0 : (detail?.authorTime ?? 0)
+  const compareHead = compare ? state.selected.head : null
+  const range = compare
+    ? (compareHead === null || compareHead === undefined
+      ? `${state.selected.base} → ${tr('worktreeHint')}`
+      : `${state.selected.base}..${compareHead}`)
+    : ''
   const files = state.files
   return [
     h('div', { key: 'head', className: 'gw-detail-head' }, [
       h('div', { key: 'subject', className: 'gw-detail-subject' }, subject),
-      h('div', { key: 'meta', className: 'gw-detail-meta' }, [
-        worktree ? h('span', { key: 'w' }, tr('worktreeHint')) : h('span', {
-          key: 'hash',
-          className: 'gw-mono gw-hash',
-          title: tr('copyHash'),
-          style: { cursor: 'pointer' },
-          onClick: () => {
-            void globalThis.navigator?.clipboard?.writeText(hash).catch(() => undefined)
-            store.flash(tr('copied'))
-          },
-        }, gwShort(hash)),
-        worktree ? null : h('span', { key: 'sep1', style: { opacity: 0.4 } }, '·'),
-        worktree ? null : h('span', { key: 'author' }, author),
-        worktree ? null : h('span', { key: 'sep2', style: { opacity: 0.4 } }, '·'),
-        worktree ? null : h('span', { key: 'date' }, gwFullDate(time)),
-      ]),
+      h('div', { key: 'meta', className: 'gw-detail-meta' }, compare
+        ? [h('span', { key: 'range', className: 'gw-mono' }, range)]
+        : [
+          worktree ? h('span', { key: 'w' }, tr('worktreeHint')) : h('span', {
+            key: 'hash',
+            className: 'gw-mono gw-hash',
+            title: tr('copyHash'),
+            style: { cursor: 'pointer' },
+            onClick: () => {
+              void globalThis.navigator?.clipboard?.writeText(hash).catch(() => undefined)
+              store.flash(tr('copied'))
+            },
+          }, gwShort(hash)),
+          worktree ? null : h('span', { key: 'sep1', style: { opacity: 0.4 } }, '·'),
+          worktree ? null : h('span', { key: 'author' }, author),
+          worktree ? null : h('span', { key: 'sep2', style: { opacity: 0.4 } }, '·'),
+          worktree ? null : h('span', { key: 'date' }, gwFullDate(time)),
+        ]),
     ]),
-    worktree || detail === null || detail.body === '' ? null : h('div', { key: 'message', className: 'gw-detail-message' }, detail.body),
+    compare || worktree || detail === null || detail.body === '' ? null : h('div', { key: 'message', className: 'gw-detail-message' }, detail.body),
     h('div', { key: 'files-head', className: 'gw-files-head' }, [
       h('span', { key: 'count' }, String(tr('filesChanged')).replace('{count}', String(files.length))),
       detail === null ? null : h('span', { key: 'add', className: 'gw-addstat' }, `+${detail.additions}`),
@@ -2718,7 +2830,7 @@ function GwFileRow({ file, store, state, tr }) {
   const split = gwSplitPath(file.path)
   const additions = file.additions ?? file.stat?.additions
   const deletions = file.deletions ?? file.stat?.deletions
-  const active = state.activeTabId === gwTabId({ mode: file.mode, hash: file.hash, path: file.path })
+  const active = state.activeTabId === gwTabId({ mode: file.mode, hash: file.hash, base: file.base, head: file.head, path: file.path })
   return h('div', {
     className: `gw-file${active ? ' selected' : ''}`,
     title: file.oldPath === undefined ? file.path : `${file.oldPath} → ${file.path}`,
@@ -2753,34 +2865,61 @@ function gwShort(hash) {
  * frame — anything absolute inside it would be cut off.
  */
 
-/** Menu rows for one branch: the four git writes plus conflict recovery. */
+/**
+ * Menu rows for one branch, in IntelliJ's order: checkout, compare, show diff
+ * with the working tree, merge it into current, update, push — then the two
+ * commit shortcuts this window adds. Rebase, rename, delete and upstream
+ * edits are deliberately not offered: this window never rewrites history or
+ * removes branches.
+ */
 function gwMenuItems(state, tr) {
-  const repo = state.repo
-  const branch = state.menu?.branch ?? null
+  const selected = state.menu?.branch ?? ''
+  const remote = state.menu?.remote === true
+  const current = state.repoInfo?.branch ?? ''
+  const noRepo = state.repo === null
+  const busy = state.busy !== null
+  const canCompare = selected !== '' && current !== '' && selected !== current
   const items = [
-    { id: 'pull', label: tr('menuPull'), hint: tr('menuPullHint'), run: () => state.store.pull() },
-    { id: 'commit', label: tr('menuCommit'), hint: tr('menuCommitHint'), run: () => state.store.startCommit(false) },
-    { id: 'push', label: tr('menuPush'), hint: tr('menuPushHint'), run: () => state.store.push() },
-    { id: 'commit-push', label: tr('menuCommitPush'), hint: tr('menuCommitPushHint'), run: () => state.store.startCommit(true) },
+    { id: 'checkout', label: tr('menuCheckout'), hint: tr('menuCheckoutHint'), disabled: noRepo || busy || selected === '' || (!remote && selected === current), run: () => state.store.checkout(selected, remote) },
+    { id: 'compare', label: tr('menuCompareWith').replace('{ref}', current), hint: tr('menuCompareHint'), disabled: noRepo || busy || !canCompare, run: () => state.store.compareWith(current, selected, tr('compareTitle').replace('{ref}', selected)) },
+    { id: 'worktree', label: tr('menuWorktreeDiff'), hint: tr('menuWorktreeDiffHint'), disabled: noRepo || busy || selected === '', run: () => state.store.compareWith(selected, null, tr('compareWorktreeTitle').replace('{ref}', selected)) },
+    { id: 'merge', label: tr('menuMergeInto').replace('{ref}', selected).replace('{current}', current), hint: tr('menuMergeHint'), disabled: noRepo || busy || !canCompare, run: () => state.store.mergeBranch(selected) },
+    { id: 'sep-writes', separator: true },
+    { id: 'update', label: tr('menuUpdate'), hint: tr('menuUpdateHint'), disabled: noRepo || busy || current === '' || selected !== current, run: () => state.store.pull() },
+    { id: 'push', label: tr('menuPush'), hint: tr('menuPushHint'), disabled: noRepo || busy || current === '' || selected !== current, run: () => state.store.push() },
   ]
   if (state.conflictCount > 0 || state.mergeInProgress === true) {
-    items.push({ id: 'resolve', label: tr('menuResolve'), hint: tr('menuResolveHint'), run: () => state.store.openMerge() })
+    items.push({ id: 'sep-conflicts', separator: true })
+    items.push({ id: 'resolve', label: tr('menuResolve'), hint: tr('menuResolveHint'), disabled: busy, run: () => state.store.openMerge() })
   }
   if (state.mergeInProgress === true) {
-    items.push({ id: 'abort', label: tr('menuAbortMerge'), hint: tr('menuAbortMergeHint'), run: () => state.store.abortMerge() })
+    items.push({ id: 'abort', label: tr('menuAbortMerge'), hint: tr('menuAbortMergeHint'), disabled: busy, run: () => state.store.abortMerge() })
   }
-  if (repo === null) return items.map((item) => ({ ...item, disabled: true }))
-  return items.map((item) => ({ ...item, branch }))
+  items.push({ id: 'sep-commit', separator: true })
+  items.push({ id: 'commit', label: tr('menuCommit'), hint: tr('menuCommitHint'), disabled: noRepo || busy, run: () => state.store.startCommit() })
+  items.push({ id: 'commit-push', label: tr('menuCommitPush'), hint: tr('menuCommitPushHint'), disabled: noRepo || busy, run: () => state.store.startCommit() })
+  return items
 }
 
 /** Branch context menu. */
 function GwContextMenu({ store, state, tr }) {
   const menu = state.menu
   const items = gwMenuItems({ ...state, store }, tr)
-  const width = 236
-  const height = 12 + items.length * 30 + 10
+  const width = 286
+  const rowHeight = (item) => (item.separator === true ? 9 : 30)
+  const height = 12 + items.reduce((sum, item) => sum + rowHeight(item), 0) + 10
   const left = Math.max(8, Math.min(menu.x, (globalThis.innerWidth || 1200) - width - 8))
-  const top = Math.max(8, Math.min(menu.y, (globalThis.innerHeight || 800) - height - 8))
+  const top = Math.max(8, Math.min(menu.y, (globalThis.innerHeight || 800) - Math.min(height, 640) - 8))
+  const renderItem = (item) => {
+    if (item.separator === true) return h('div', { key: item.id, className: 'gw-menu-sep' })
+    return h('button', {
+      key: item.id,
+      className: 'gw-menu-item',
+      disabled: item.disabled === true,
+      title: item.hint,
+      onClick: () => item.run(),
+    }, item.label)
+  }
   return [
     h('div', {
       key: 'backdrop',
@@ -2788,18 +2927,16 @@ function GwContextMenu({ store, state, tr }) {
       onMouseDown: () => store.closeMenu(),
       onContextMenu: (event) => { event.preventDefault(); store.closeMenu() },
     }),
-    h('div', { key: 'menu', className: 'gw-menu', style: { left: `${left}px`, top: `${top}px`, width: `${width}px` } }, [
+    h('div', {
+      key: 'menu',
+      className: 'gw-menu',
+      style: { left: `${left}px`, top: `${top}px`, width: `${width}px`, maxHeight: '640px', overflowY: 'auto' },
+    }, [
       h('div', { key: 'head', className: 'gw-menu-head' }, [
         h(GwBranchIcon, { key: 'i', size: 11 }),
         h('span', { key: 'n', className: 'gw-menu-branch', title: menu.branch ?? '' }, menu.branch ?? tr('allBranches')),
       ]),
-      items.map((item) => h('button', {
-        key: item.id,
-        className: 'gw-menu-item',
-        disabled: item.disabled === true || state.busy !== null,
-        title: item.hint,
-        onClick: () => item.run(),
-      }, item.label)),
+      items.map(renderItem),
     ]),
   ]
 }
@@ -2887,6 +3024,7 @@ function GwNotice({ store, state, tr }) {
     .replace('{hash}', notice.params?.hash ?? '')
     .replace('{count}', String(notice.params?.count ?? ''))
     .replace('{upstream}', notice.params?.upstream ?? '')
+    .replace('{branch}', notice.params?.branch ?? '')
   return h('div', { className: `gw-notice ${tone}`, role: 'status' }, [
     h('span', { key: 't', className: 'gw-notice-text', title: notice.params?.detail ?? '' }, text),
     notice.params?.detail === undefined ? null : h('pre', { key: 'd', className: 'gw-notice-detail' }, notice.params.detail),
@@ -2898,6 +3036,26 @@ function GwNotice({ store, state, tr }) {
 function GwOverlay({ store, t, translate }) {
   const tr = typeof translate === 'function' ? translate : (t ?? ((key) => key))
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState)
+  // Escape dismisses whatever floating surface is on top: a dialog first, then
+  // the branch menu. It never reaches the centre panel's own Escape handler,
+  // which would otherwise leave the diff while only trying to close the menu.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return
+      if (state.dialog !== null) {
+        event.preventDefault()
+        store.closeDialog()
+        return
+      }
+      if (state.menu !== null) {
+        event.preventDefault()
+        store.closeMenu()
+      }
+    }
+    if (typeof window === 'undefined') return undefined
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [store, state.menu, state.dialog])
   const layers = [h(GwStyle, { key: 'style' })]
   if (state.busy !== null) {
     layers.push(h('div', { key: 'busy', className: 'gw-busy', role: 'status' }, [
@@ -3000,6 +3158,9 @@ function GwDiffPanel({ store, t, translate }) {
     const onKeyDown = (event) => {
       if (event.key !== 'Escape') return
       if (event.defaultPrevented) return
+      const current = store.getState()
+      // A menu, dialog or merge window owns Escape while it is open.
+      if (current.menu !== null || current.dialog !== null || current.merge !== null) return
       event.preventDefault()
       store.showConversation()
     }
@@ -3041,7 +3202,14 @@ function GwDiffPanel({ store, t, translate }) {
       h('div', { key: 'crumbs', className: 'gw-crumbs' }, tab === undefined ? [] : h(GwCrumbs, { path: tab.file.path })),
       stats === null || stats.additions === 0 ? null : h('span', { key: 'add', className: 'gw-addstat' }, `+${stats.additions}`),
       stats === null || stats.deletions === 0 ? null : h('span', { key: 'del', className: 'gw-delstat' }, `-${stats.deletions}`),
-      tab === undefined ? null : h('span', { key: 'rev', className: 'gw-mono', style: { opacity: 0.7 } }, tab.file.mode === 'commit' ? gwShort(tab.file.hash) : (tab.file.mode === 'index' ? tr('staged') : tr('worktreeHint'))),
+      tab === undefined ? null : h('span', { key: 'rev', className: 'gw-mono', style: { opacity: 0.7 } },
+        tab.file.mode === 'commit' ? gwShort(tab.file.hash)
+          : tab.file.mode === 'index' ? tr('staged')
+            : tab.file.mode === 'compare'
+              ? (tab.file.head === null || tab.file.head === undefined
+                ? `${tab.file.base} → ${tr('worktreeHint')}`
+                : `${tab.file.base}..${tab.file.head}`)
+              : tr('worktreeHint')),
       state.diff?.binary === true ? null : h('div', { key: 'modes', className: 'gw-seg' }, [
         h('button', {
           key: 'side',

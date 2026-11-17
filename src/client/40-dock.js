@@ -195,10 +195,10 @@ function GwDock({ store, t, translate, useWorkspaces }) {
   const localBranches = refTree.local.filter((branch) => branch.name !== '')
   const remoteBranches = refTree.remote.filter((branch) => !branch.name.endsWith('/HEAD'))
 
-  const openBranchMenu = (event, name) => {
+  const openBranchMenu = (event, name, remote) => {
     event.preventDefault()
     event.stopPropagation()
-    store.openMenu(event.clientX, event.clientY, name)
+    store.openMenu(event.clientX, event.clientY, name, remote)
   }
 
   const renderBranch = (branch, kind) => h('div', {
@@ -206,7 +206,7 @@ function GwDock({ store, t, translate, useWorkspaces }) {
     className: `gw-tree-row${branch.name === state.ref ? ' active' : ''}${branch.head === '*' ? ' head' : ''}`,
     title: `${branch.name}\n${tr('menuHint')}`,
     onClick: () => { void store.selectRef(branch.name === state.ref ? null : branch.name) },
-    onContextMenu: (event) => openBranchMenu(event, branch.name),
+    onContextMenu: (event) => openBranchMenu(event, branch.name, kind === 'remote'),
   }, [
     h('span', { key: 'icon', style: { color: branch.head === '*' ? 'var(--dsw-alias-brand-primary, #4a88ff)' : 'inherit', display: 'inline-flex' } }, h(GwBranchIcon, { size: 11 })),
     h('span', { key: 'name', className: 'gw-branch-name' }, branch.name),
@@ -430,33 +430,44 @@ function GwCommitDetails({ store, state, tr }) {
     return h('div', { className: 'gw-empty' }, tr('selectCommit'))
   }
   const worktree = state.selected.kind === 'worktree'
+  const compare = state.selected.kind === 'compare'
   const detail = state.detail
-  const subject = worktree ? tr('localChanges') : (detail?.subject ?? '')
+  const subject = compare
+    ? (detail?.title ?? tr('compareTitle').replace('{ref}', String(state.selected.base ?? '')))
+    : (worktree ? tr('localChanges') : (detail?.subject ?? ''))
   const hash = worktree ? '' : (detail?.hash ?? '')
   const author = worktree ? '' : (detail?.author ?? '')
   const time = worktree ? 0 : (detail?.authorTime ?? 0)
+  const compareHead = compare ? state.selected.head : null
+  const range = compare
+    ? (compareHead === null || compareHead === undefined
+      ? `${state.selected.base} → ${tr('worktreeHint')}`
+      : `${state.selected.base}..${compareHead}`)
+    : ''
   const files = state.files
   return [
     h('div', { key: 'head', className: 'gw-detail-head' }, [
       h('div', { key: 'subject', className: 'gw-detail-subject' }, subject),
-      h('div', { key: 'meta', className: 'gw-detail-meta' }, [
-        worktree ? h('span', { key: 'w' }, tr('worktreeHint')) : h('span', {
-          key: 'hash',
-          className: 'gw-mono gw-hash',
-          title: tr('copyHash'),
-          style: { cursor: 'pointer' },
-          onClick: () => {
-            void globalThis.navigator?.clipboard?.writeText(hash).catch(() => undefined)
-            store.flash(tr('copied'))
-          },
-        }, gwShort(hash)),
-        worktree ? null : h('span', { key: 'sep1', style: { opacity: 0.4 } }, '·'),
-        worktree ? null : h('span', { key: 'author' }, author),
-        worktree ? null : h('span', { key: 'sep2', style: { opacity: 0.4 } }, '·'),
-        worktree ? null : h('span', { key: 'date' }, gwFullDate(time)),
-      ]),
+      h('div', { key: 'meta', className: 'gw-detail-meta' }, compare
+        ? [h('span', { key: 'range', className: 'gw-mono' }, range)]
+        : [
+          worktree ? h('span', { key: 'w' }, tr('worktreeHint')) : h('span', {
+            key: 'hash',
+            className: 'gw-mono gw-hash',
+            title: tr('copyHash'),
+            style: { cursor: 'pointer' },
+            onClick: () => {
+              void globalThis.navigator?.clipboard?.writeText(hash).catch(() => undefined)
+              store.flash(tr('copied'))
+            },
+          }, gwShort(hash)),
+          worktree ? null : h('span', { key: 'sep1', style: { opacity: 0.4 } }, '·'),
+          worktree ? null : h('span', { key: 'author' }, author),
+          worktree ? null : h('span', { key: 'sep2', style: { opacity: 0.4 } }, '·'),
+          worktree ? null : h('span', { key: 'date' }, gwFullDate(time)),
+        ]),
     ]),
-    worktree || detail === null || detail.body === '' ? null : h('div', { key: 'message', className: 'gw-detail-message' }, detail.body),
+    compare || worktree || detail === null || detail.body === '' ? null : h('div', { key: 'message', className: 'gw-detail-message' }, detail.body),
     h('div', { key: 'files-head', className: 'gw-files-head' }, [
       h('span', { key: 'count' }, String(tr('filesChanged')).replace('{count}', String(files.length))),
       detail === null ? null : h('span', { key: 'add', className: 'gw-addstat' }, `+${detail.additions}`),
@@ -474,7 +485,7 @@ function GwFileRow({ file, store, state, tr }) {
   const split = gwSplitPath(file.path)
   const additions = file.additions ?? file.stat?.additions
   const deletions = file.deletions ?? file.stat?.deletions
-  const active = state.activeTabId === gwTabId({ mode: file.mode, hash: file.hash, path: file.path })
+  const active = state.activeTabId === gwTabId({ mode: file.mode, hash: file.hash, base: file.base, head: file.head, path: file.path })
   return h('div', {
     className: `gw-file${active ? ' selected' : ''}`,
     title: file.oldPath === undefined ? file.path : `${file.oldPath} → ${file.path}`,

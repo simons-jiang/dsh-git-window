@@ -30,11 +30,19 @@ function check(name, condition, detail) {
 
 // ---------------------------------------------------------------- environment
 const storage = new Map()
+const windowListeners = new Map()
 let capturedEntry = null
 globalThis.window = {
   __ModuleLoader__: { load: (entry) => { capturedEntry = entry } },
-  addEventListener() {},
-  removeEventListener() {},
+  addEventListener(type, listener) {
+    const list = windowListeners.get(type) ?? []
+    list.push(listener)
+    windowListeners.set(type, list)
+  },
+  removeEventListener(type, listener) {
+    const list = windowListeners.get(type) ?? []
+    windowListeners.set(type, list.filter((entry) => entry !== listener))
+  },
   innerWidth: 1440,
   innerHeight: 900,
   setTimeout: setTimeout,
@@ -185,6 +193,8 @@ function hostValue(method) {
       return { remaining: [], merging: true }
     case 'abortMerge':
       return { conflicts: [] }
+    case 'compare':
+      return { base: 'main', head: 'feature/x', files: [{ path: 'pom.xml', status: 'M', additions: 2, deletions: 1 }], additions: 2, deletions: 1, repo: { root: repo } }
     default:
       return {}
   }
@@ -283,6 +293,17 @@ function walk(node) {
   node.children.forEach(walk)
 }
 
+/** Dispatch one real keydown through the listeners the bundle registered. */
+function pressKey(key) {
+  const event = {
+    key,
+    defaultPrevented: false,
+    preventDefault() { this.defaultPrevented = true },
+  }
+  for (const listener of [...(windowListeners.get('keydown') ?? [])]) listener(event)
+  return event
+}
+
 function renderSeat(name, extra = {}) {
   const seat = registrations.find((item) => item.options.name === name)
   if (seat === undefined) throw new Error(`seat ${name} missing`)
@@ -336,9 +357,22 @@ check('diff panel has no raw keys', !panelText2.includes('sideBySide') && !panel
 store.openMenu(120, 240, 'main')
 check('menu state opened', store.getState().menu !== null)
 const menuText = renderSeat('shell.overlay')
-check('menu renders four actions', ['拉取代码', '提交代码', '推送代码', '提交并推送代码'].every((label) => menuText.includes(label)), menuText.slice(0, 200))
-check('menu has no raw keys', !menuText.includes('menuPull') && !menuText.includes('menuCommit'))
-store.closeMenu()
+const ideaLabels = ['签出', '与', '显示与工作树的差异', '合并到', '更新', '推送…', '提交…', '提交并推送…']
+check('menu renders the IDEA actions', ideaLabels.every((label) => menuText.includes(label)), menuText.slice(0, 320))
+check('menu has no raw keys', !/menu(Checkout|Update|Rename|Delete|Commit|Tracked)/.test(menuText))
+const panelBeforeEscape = layoutSelectPanel
+const escapeEvent = pressKey('Escape')
+check('Escape closes the menu', store.getState().menu === null && escapeEvent.defaultPrevented === true)
+check('Escape keeps the centre panel while closing the menu', layoutSelectPanel === panelBeforeEscape)
+
+// ------------------------------------------------------------- compare + dialogs
+await store.compareWith('main', 'feature/x', "与 'feature/x' 比较")
+await new Promise((resolve) => setTimeout(resolve, 30))
+state = store.getState()
+check('compare selection built', state.selected?.kind === 'compare' && state.files.length === 1, JSON.stringify(state.selected))
+const compareText = renderSeat('shell.bottom')
+check('compare details render the range', compareText.includes('main..feature/x'), compareText.slice(-320))
+
 
 // -------------------------------------------------------------- commit dialog
 await store.startCommit()
