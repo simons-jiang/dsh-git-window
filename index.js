@@ -20,7 +20,8 @@
  */
 import { spawn } from 'node:child_process'
 import { readFile, realpath, stat, writeFile } from 'node:fs/promises'
-import { isAbsolute, resolve, sep } from 'node:path'
+import { resolve } from 'node:path'
+import { platform } from './platform/index.js'
 
 export const name = 'dsh-git-window'
 
@@ -99,12 +100,7 @@ function runGit(cwd, args, options = {}) {
         cwd,
         env: {
           ...process.env,
-          GIT_OPTIONAL_LOCKS: '0',
-          GIT_TERMINAL_PROMPT: '0',
-          GIT_PAGER: 'cat',
-          PAGER: 'cat',
-          LC_ALL: 'C',
-          LANG: 'C',
+          ...platform.gitEnvironment(),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       })
@@ -187,11 +183,6 @@ function allowedRoots(ctx) {
   return Promise.all(paths.map((path) => canonicalDirectory(path))).then((roots) => roots.filter((root) => root !== undefined))
 }
 
-/** Whether `target` is one of `roots` or lies inside one. */
-function isInside(target, roots) {
-  return roots.some((root) => target === root || target.startsWith(root + sep))
-}
-
 /**
  * Resolve the directory a request names and prove it belongs to a registered
  * Workspace. Any other path — including `..` escapes and symlinked targets —
@@ -201,11 +192,11 @@ async function admitCwd(ctx, requested) {
   if (typeof requested !== 'string' || requested.trim() === '') {
     throw new RequestError('bad-path', 'cwd is required', 400)
   }
-  if (!isAbsolute(requested)) throw new RequestError('bad-path', 'cwd must be absolute', 400)
+  if (!platform.isAbsolutePath(requested)) throw new RequestError('bad-path', 'cwd must be absolute', 400)
   const target = await canonicalDirectory(requested)
   if (target === undefined) throw new RequestError('bad-path', 'directory does not exist', 400)
   const roots = await allowedRoots(ctx)
-  if (!isInside(target, roots)) {
+  if (!roots.some((root) => platform.isPathInside(root, target))) {
     throw new RequestError('forbidden-path', 'directory is outside every registered workspace', 403)
   }
   return target
@@ -563,13 +554,7 @@ async function fileDiff(cwd, payload) {
   if (root === '') throw new RequestError(NOT_REPO, 'not a git repository', 409)
   const mode = payload.mode === 'index' || payload.mode === 'worktree' || payload.mode === 'compare' ? payload.mode : 'commit'
   const path = String(payload.path ?? '')
-  if (path === '' || isAbsolute(path) || path.includes('\0') || path.split('/').includes('..')) {
-    throw new RequestError('bad-path', 'path must be repository-relative', 400)
-  }
-  const absolute = resolve(root, path)
-  if (absolute !== root && !absolute.startsWith(root + sep)) {
-    throw new RequestError('bad-path', 'path escapes the repository', 400)
-  }
+  admitPath(root, path)
   const common = ['--no-ext-diff', '--no-textconv', '--no-color', `--unified=${DIFF_CONTEXT_LINES}`, '-M']
   let args
   if (mode === 'worktree') {
@@ -658,11 +643,11 @@ async function branchList(cwd) {
 /** Validate one repository-relative path and return its absolute form. */
 function admitPath(root, path) {
   const text = String(path ?? '')
-  if (text === '' || isAbsolute(text) || text.includes('\0') || text.split('/').includes('..')) {
+  if (!platform.isRepoRelativePath(text)) {
     throw new RequestError('bad-path', 'path must be repository-relative', 400)
   }
   const absolute = resolve(root, text)
-  if (absolute !== root && !absolute.startsWith(root + sep)) {
+  if (!platform.isPathInside(root, absolute)) {
     throw new RequestError('bad-path', 'path escapes the repository', 400)
   }
   return absolute
@@ -995,7 +980,7 @@ async function repositoryList(ctx) {
     })
   }
   results.sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)))
-  return { workspaces: results }
+  return { workspaces: results, platform: platform.describe() }
 }
 
 /** Body reader bounded to one small JSON document. */

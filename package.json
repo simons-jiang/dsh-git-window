@@ -18,14 +18,16 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
-    "PUBLISHING.md"
+    "PUBLISHING.md",
+    "platform"
   ],
   "scripts": {
     "build": "node build.mjs",
     "check": "node --check index.js && node --check client.js",
     "test": "node test/api-test.mjs",
     "test:write": "node test/git-actions-test.mjs",
-    "test:client": "node test/client-smoke.mjs"
+    "test:client": "node test/client-smoke.mjs",
+    "test:platform": "node test/platform.mjs"
   },
   "dsh": {
     "bundle": {

@@ -155,13 +155,13 @@ function gwSplitPath(path) {
  * The repository a directory belongs to: the longest configured root that
  * contains it. Used to follow the project the user is working in.
  */
-function gwRepoForPath(repos, path) {
+function gwRepoForPath(repos, path, platform) {
   let best
   let bestLength = -1
   for (const repo of repos) {
     for (const candidate of [repo.path, repo.root]) {
       if (typeof candidate !== 'string' || candidate === '') continue
-      if (path !== candidate && !path.startsWith(`${candidate}/`)) continue
+      if (!platform.covers(candidate, path)) continue
       if (candidate.length > bestLength) {
         best = repo
         bestLength = candidate.length
@@ -194,6 +194,8 @@ function gwCreateStore(layoutRef) {
     sessionProject: null,
     /** Project for which the user picked a repository by hand; suppresses following until the project changes. */
     suppressedFor: null,
+    /** Native path rules reported by the Host (macos / windows). */
+    platform: gwPlatform({ id: gwDetectPlatformId() }),
     repos: [],
     reposLoading: false,
     repo: null,
@@ -264,10 +266,11 @@ function gwCreateStore(layoutRef) {
       return false
     }
     const repos = Array.isArray(value?.workspaces) ? value.workspaces : []
-    const projectRepo = state.sessionProject === null ? null : gwRepoForPath(repos, state.sessionProject)
+    const platform = gwPlatform(value?.platform)
+    const projectRepo = state.sessionProject === null ? null : gwRepoForPath(repos, state.sessionProject, platform)
     const kept = state.repo === null ? null : (repos.find((entry) => entry.path === state.repo.path) ?? null)
     const next = projectRepo ?? kept
-    patch({ repos })
+    patch({ repos, platform })
     if (next === null) {
       if (state.repo === null) return false
       layoutRef.current?.selectPanel?.(null)
@@ -288,12 +291,13 @@ function gwCreateStore(layoutRef) {
     try {
       const value = await gwCall('repos', {})
       const repos = Array.isArray(value?.workspaces) ? value.workspaces : []
-      const projectRepo = state.sessionProject === null ? null : gwRepoForPath(repos, state.sessionProject)
+      const platform = gwPlatform(value?.platform)
+      const projectRepo = state.sessionProject === null ? null : gwRepoForPath(repos, state.sessionProject, platform)
       const chosen = projectRepo
         ?? repos.find((entry) => entry.path === state.repoPath)
         ?? repos[0]
         ?? null
-      patch({ repos, reposLoading: false, repo: chosen, repoPath: chosen?.path ?? null })
+      patch({ repos, platform, reposLoading: false, repo: chosen, repoPath: chosen?.path ?? null })
       if (chosen !== null) {
         gwWritePrefs({ repoPath: chosen.path })
         await Promise.all([loadLog(), loadBranches()])
@@ -429,7 +433,7 @@ function gwCreateStore(layoutRef) {
     if (project === null || project === undefined) return
     if (state.repos.length === 0) return
     if (state.suppressedFor === project) return
-    const repo = gwRepoForPath(state.repos, project)
+    const repo = gwRepoForPath(state.repos, project, state.platform)
     if (repo !== null && repo.path !== state.repo?.path) void selectRepo(repo.path)
   }
 

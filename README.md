@@ -80,9 +80,11 @@
 
 ```
 index.js               Host 半：git 读取 + HTTP 路由 + 目录/路径校验
+platform/              平台差异层：contract + macos + windows + 选择器
 client.js              浏览器半（由 build.mjs 生成，勿手改）
 src/client/*.js        浏览器半的可读源码（按顺序拼接）
   00-css.js            整份样式表（主题令牌 + 差异/图语义色）
+  06-platform.js       浏览器端的平台镜像（分隔符、根、大小写规则）
   10-core.js           Host API 客户端 + 共享 store
   20-graph.js          提交图分列算法与单行 SVG
   30-diff.js           hunk 配对、行内着色、并排/统一渲染
@@ -93,7 +95,22 @@ locale/en.json         UI 文案 + 插件标题/说明（en）
 locale/zh.json         UI 文案 + 插件标题/说明（zh）
 build.mjs              拼接源码、内联词条、生成 client.js
 test/api-test.mjs      Host API 自测（node test/api-test.mjs <repo>）
+test/platform.mjs      平台契约自测（两套实现都不能缺项）
 ```
+
+## 跨平台
+
+只支持 **macOS** 与 **Windows**。所有系统差异收在 `platform/`：
+
+- `contract.js` 定义契约与 `PLATFORM_METHODS`；
+- `macos.js` / `windows.js` 各实现一份（`getPathSeparator()`、`isCaseInsensitive()`、
+  `toPosix()` / `toNative()`、`isAbsolutePath()`、`isRepoRelativePath()`、`isPathInside()`、
+  `gitEnvironment()` 等；两套都按大小写不敏感比较）。
+- `index.js` 按 `process.platform` 选择（非 macOS 一律按 Windows 处理）。
+
+浏览器端在 `src/client/06-platform.js` 有一份镜像，平台事实由 Host 的 `repos` 响应下发
+（首屏先按 UA 粗猜，拿到响应后以 Host 为准）；`gwRepoForPath` 等原生路径比较都走它。
+新增系统 = 新增一个实现 + 在 `PLATFORM_METHODS` 登记，平台测试会强制两套实现都覆盖。
 
 ## 安装
 
@@ -119,6 +136,7 @@ node --check index.js client.js    # 语法检查
 node test/api-test.mjs ~/path/to/repo   # Host 只读接口
 node test/git-actions-test.mjs          # Host 写入/冲突流程（自建一次性仓库）
 node test/client-smoke.mjs              # 浏览器半离线冒烟：假 React/假 ctx 真渲染一遍
+node test/platform.mjs                  # 平台契约：macOS / Windows 两套实现与契约完整性
 ```
 
 `client-smoke.mjs` 不需要浏览器：它按 `window.__ModuleLoader__` 的方式加载 `client.js`，

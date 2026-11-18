@@ -116,7 +116,10 @@ const conflictWorktree = [
 function hostValue(method) {
   switch (method) {
     case 'repos':
-      return { workspaces: [{ path: repo, root: repo, title: 'demo-repo', updatedAt: '2026-11-01T00:00:00Z', sessionCount: 2 }] }
+      return {
+        workspaces: [{ path: repo, root: repo, title: 'demo-repo', updatedAt: '2026-11-01T00:00:00Z', sessionCount: 2 }],
+        platform: { id: 'macos', label: 'macOS', separator: '/', caseInsensitive: true },
+      }
     case 'log':
       return {
         repo: { root: repo, branch: 'main', detached: false, head: 'abc1234', upstream: 'origin/main', ahead: 0, behind: 0, changeCount: 1, conflicts: [], merging: false },
@@ -333,6 +336,7 @@ await store.loadRepos()
 await new Promise((resolve) => setTimeout(resolve, 30))
 let state = store.getState()
 check('repository loaded', state.repo?.path === repo, JSON.stringify(state.repo))
+check('platform facts arrive from the host', state.platform?.id === 'macos', JSON.stringify(state.platform))
 check('commits loaded', state.commits.length === 2, String(state.commits.length))
 check('graph rows built', state.graphRows.length === 2, String(state.graphRows.length))
 check('first commit auto-selected', state.selected?.hash === 'abc1234def', JSON.stringify(state.selected))
