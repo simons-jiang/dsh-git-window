@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-git-window",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "IDEA-style Git tool window for DeepSeek Harness: docked commit log with graph and branches, plus a centre diff view.",
   "type": "module",
   "icon": "icon.svg",

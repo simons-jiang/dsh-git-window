@@ -121,7 +121,7 @@ git+https://github.com/simons-jiang/dsh-git-window.git
 ```
 
 装完在 Plugins 列表里启用即可，页面底部会出现「日志」工具窗（侧边栏底部的 Git 按钮随时开关）。
-不需要任何账号或 token；建议 DSH 版本与本仓库开发时一致（0.2.2-rc.3）。
+不需要任何账号或 token；建议 DSH 版本大于等于 0.2.2-rc.3。
 
 ## 发布
 
