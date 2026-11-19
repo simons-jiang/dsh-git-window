@@ -24,12 +24,11 @@ const SHIPPED = [
   'client.js',
   'cordis.patch.yml',
   'icon.svg',
-  'screenshots.json',
   'README.md',
   'PUBLISHING.md',
   'LICENSE',
   'locale',
-  'docs',
+  'platform',
 ]
 
 await rm(out, { recursive: true, force: true })
