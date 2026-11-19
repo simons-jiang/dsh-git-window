@@ -2743,6 +2743,9 @@ function GwDock({ store, t, translate, useWorkspaces }) {
     document.addEventListener('mouseup', up)
   }
 
+  // Read the palette before the closed-state return so hook order never changes.
+  const sharedTheme = useSyncExternalStore(gwSubscribeTheme, gwSharedTheme, gwSharedTheme)
+
   if (!state.open) return null
 
   const filter = state.filter.trim().toLowerCase()
@@ -2783,9 +2786,6 @@ function GwDock({ store, t, translate, useWorkspaces }) {
 
   // Never taller than the room the shell can spare (see gwMaxHeight).
   const dockHeight = Math.min(state.height, gwMaxHeight())
-  // The code workspace publishes its palette through this attribute; the
-  // stylesheet it links scopes the aliases to it, so this window follows.
-  const sharedTheme = useSyncExternalStore(gwSubscribeTheme, gwSharedTheme, gwSharedTheme)
   return h('div', {
     className: 'gw-dock',
     'data-dsh-theme': sharedTheme === '' ? undefined : sharedTheme,

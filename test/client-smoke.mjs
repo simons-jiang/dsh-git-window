@@ -307,8 +307,7 @@ function walk(node) {
     return
   }
   if (typeof node.type === 'function') {
-    hookCursor = 0
-    walk(node.type({ ...node.props, children: node.children }))
+    walk(invokeComponent(node.type, { ...node.props, children: node.children }))
     return
   }
   node.children.forEach(walk)
@@ -323,8 +322,7 @@ function collectAttribute(node, attribute, out = []) {
   }
   if (typeof node !== 'object') return out
   if (typeof node.type === 'function') {
-    hookCursor = 0
-    collectAttribute(node.type({ ...node.props, children: node.children }), attribute, out)
+    collectAttribute(invokeComponent(node.type, { ...node.props, children: node.children }), attribute, out)
     return out
   }
   const value = node.props?.[attribute]
@@ -336,6 +334,20 @@ function collectAttribute(node, attribute, out = []) {
 /** Fire one window event through the listeners the bundle registered. */
 function fireWindowEvent(type, detail) {
   for (const listener of [...(windowListeners.get(type) ?? [])]) listener({ type, detail })
+}
+
+/** Component invocations, so a hook-order change fails the same way React would. */
+const hookCounts = new Map()
+function invokeComponent(type, props) {
+  hookCursor = 0
+  const output = type(props)
+  const counted = hookCursor
+  const previous = hookCounts.get(type)
+  if (previous !== undefined && previous !== counted) {
+    throw new Error(`hook order changed in ${type.name || 'anonymous component'}: ${previous} → ${counted}`)
+  }
+  hookCounts.set(type, counted)
+  return output
 }
 
 /** Dispatch one real keydown through the listeners the bundle registered. */
@@ -360,7 +372,7 @@ function renderSeat(name, extra = {}) {
     ...extra,
   }
   text.length = 0
-  walk(seat.component(props))
+  walk(invokeComponent(seat.component, props))
   return text.join(' ')
 }
 
@@ -373,11 +385,16 @@ check('dock renders without throwing', dockText.length > 0)
 check('dock is localized (no raw keys)', !/\b(menuPull|log|branches|subject|author)\b/.test(dockText.replace(/日志|分支|提交信息|作者|日期/g, '')), dockText.slice(0, 160))
 check('dock shows the localized tab', dockText.includes('日志'), dockText.slice(0, 120))
 
+store.setOpen(false)
+check('closed dock renders nothing', renderSeat('shell.bottom').length === 0)
+store.setOpen(true)
+check('dock reopens after closing', renderSeat('shell.bottom').includes('日志'))
+
 // The palette comes from dsh-ide-window: attribute on the dock + its stylesheet.
 const dockThemes = () => {
   const seat = registrations.find((item) => item.options.name === 'shell.bottom')
   const injects = seat.options.inject()
-  return collectAttribute(seat.component({ ...injects, t: injects.translate, useWorkspaces: (selector) => selector({ items: [] }) }), 'data-dsh-theme')
+  return collectAttribute(invokeComponent(seat.component, { ...injects, t: injects.translate, useWorkspaces: (selector) => selector({ items: [] }) }), 'data-dsh-theme')
 }
 check('dock wears the published palette', dockThemes().includes('dracula'), JSON.stringify(dockThemes()))
 check('palette stylesheet linked from the code workspace', themeLinks.some((link) => String(link.href ?? '').includes('/dsh-ide/theme?id=dracula')), JSON.stringify(themeLinks.map((link) => link.href)))
