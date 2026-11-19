@@ -49,12 +49,26 @@ globalThis.window = {
   setTimeout: setTimeout,
   navigator: { language: 'zh-CN' },
 }
+/** Stylesheets the theme bridge injected (`<link id="dsh-theme-link">`). */
+const themeLinks = []
 globalThis.document = {
   baseURI: 'http://127.0.0.1:61387/',
   documentElement: { lang: 'zh-CN' },
   addEventListener() {},
   removeEventListener() {},
-  createElement: () => ({ style: {} }),
+  createElement: (tag) => {
+    const attributes = new Map()
+    return {
+      tag,
+      style: {},
+      setAttribute: (name, value) => attributes.set(name, String(value)),
+      getAttribute: (name) => (attributes.has(name) ? attributes.get(name) : null),
+      addEventListener() {},
+      remove() {},
+    }
+  },
+  getElementById: (id) => themeLinks.find((link) => link.id === id) ?? null,
+  head: { append: (link) => { themeLinks.push(link) } },
   body: { appendChild() {} },
 }
 globalThis.localStorage = {
@@ -214,6 +228,9 @@ globalThis.fetch = async (input, init) => {
 }
 
 // ------------------------------------------------------------------- load bundle
+// The code workspace publishes its palette under this key; the bundle reads it
+// once at load time, so seeding it here is what a real page sees after a switch.
+storage.set('dsh-theme', 'dracula')
 const code = await readFile(join(root, 'client.js'), 'utf8')
 // eslint-disable-next-line no-new-func
 new Function('window', 'document', code)(globalThis.window, globalThis.document)
@@ -297,6 +314,30 @@ function walk(node) {
   node.children.forEach(walk)
 }
 
+/** Collect one attribute from every host element in a rendered tree. */
+function collectAttribute(node, attribute, out = []) {
+  if (node === null || node === undefined || node === false) return out
+  if (Array.isArray(node)) {
+    for (const child of node) collectAttribute(child, attribute, out)
+    return out
+  }
+  if (typeof node !== 'object') return out
+  if (typeof node.type === 'function') {
+    hookCursor = 0
+    collectAttribute(node.type({ ...node.props, children: node.children }), attribute, out)
+    return out
+  }
+  const value = node.props?.[attribute]
+  if (value !== undefined) out.push(value)
+  for (const child of node.children ?? []) collectAttribute(child, attribute, out)
+  return out
+}
+
+/** Fire one window event through the listeners the bundle registered. */
+function fireWindowEvent(type, detail) {
+  for (const listener of [...(windowListeners.get(type) ?? [])]) listener({ type, detail })
+}
+
 /** Dispatch one real keydown through the listeners the bundle registered. */
 function pressKey(key) {
   const event = {
@@ -331,6 +372,19 @@ const dockText = renderSeat('shell.bottom')
 check('dock renders without throwing', dockText.length > 0)
 check('dock is localized (no raw keys)', !/\b(menuPull|log|branches|subject|author)\b/.test(dockText.replace(/日志|分支|提交信息|作者|日期/g, '')), dockText.slice(0, 160))
 check('dock shows the localized tab', dockText.includes('日志'), dockText.slice(0, 120))
+
+// The palette comes from dsh-ide-window: attribute on the dock + its stylesheet.
+const dockThemes = () => {
+  const seat = registrations.find((item) => item.options.name === 'shell.bottom')
+  const injects = seat.options.inject()
+  return collectAttribute(seat.component({ ...injects, t: injects.translate, useWorkspaces: (selector) => selector({ items: [] }) }), 'data-dsh-theme')
+}
+check('dock wears the published palette', dockThemes().includes('dracula'), JSON.stringify(dockThemes()))
+check('palette stylesheet linked from the code workspace', themeLinks.some((link) => String(link.href ?? '').includes('/dsh-ide/theme?id=dracula')), JSON.stringify(themeLinks.map((link) => link.href)))
+fireWindowEvent('dsh-theme', { id: 'night-owl' })
+check('a live switch reaches the dock', dockThemes().includes('night-owl'), JSON.stringify(dockThemes()))
+fireWindowEvent('dsh-theme', { id: '' })
+check('following DSH clears the attribute', dockThemes().length === 0, JSON.stringify(dockThemes()))
 
 // the boot effect fetches repositories and the log
 await store.loadRepos()

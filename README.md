@@ -54,6 +54,22 @@
   仓库自动切到该项目对应的 Git 仓库；在同一项目内手动选别的仓库会保留你的选择，
   直到切到另一个项目再恢复跟随。点「刷新」会重新读取仓库列表（新增/删除工作区无需刷新页面）。
 
+## 跟随代码工作区的主题
+
+同时装了 [`dsh-ide-window`](https://github.com/simons-jiang/dsh-ide-window) 时，本插件会**跟着它选的配色变**：
+代码工作区切到「德古拉」或「IntelliJ 浅色」，这里的工具窗口同步换色，不需要单独设置。
+
+它只读，不写：
+
+- `localStorage['dsh-theme']` —— 当前主题 id（空 = 跟随 DSH）
+- 同页 `dsh-theme` 事件（`detail.id`）—— 切换后立即生效
+- 样式表来自 `/dsh-ide/theme?id=<id>`，本插件只把自己的根节点标成 `data-dsh-theme="<id>"`
+
+没装代码工作区时样式请求 404，本插件保持 DSH 自带配色，不会报错。
+实现在 `src/client/05-theme.js`，契约变更需两边同时改。
+
+---
+
 ## 数据与安全
 
 - **怎么读**：全部通过系统 `git` 可执行文件（`log` / `diff` / `diff-tree` / `for-each-ref` /

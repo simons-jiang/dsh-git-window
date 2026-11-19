@@ -17,6 +17,9 @@ const GW_NS = 'dsh-git-window'
 function apply(ctx) {
   const layoutRef = { current: undefined }
   const store = gwCreateStore(layoutRef)
+  // Subscribe once, before any surface renders: the palette comes from the code
+  // workspace and can change at any time.
+  gwWatchTheme()
   let bound = undefined
   try {
     if (ctx.locale !== undefined && typeof ctx.locale.register === 'function') {

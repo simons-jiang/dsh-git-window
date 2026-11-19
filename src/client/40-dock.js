@@ -215,8 +215,12 @@ function GwDock({ store, t, translate, useWorkspaces }) {
 
   // Never taller than the room the shell can spare (see gwMaxHeight).
   const dockHeight = Math.min(state.height, gwMaxHeight())
+  // The code workspace publishes its palette through this attribute; the
+  // stylesheet it links scopes the aliases to it, so this window follows.
+  const sharedTheme = useSyncExternalStore(gwSubscribeTheme, gwSharedTheme, gwSharedTheme)
   return h('div', {
     className: 'gw-dock',
+    'data-dsh-theme': sharedTheme === '' ? undefined : sharedTheme,
     style: { height: `${dockHeight}px` },
     // Anywhere else in the window (log rows, detail files, empty space) opens
     // the plugin's own menu instead of the browser's. Text fields keep theirs.
