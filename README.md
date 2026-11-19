@@ -144,6 +144,10 @@ git+https://github.com/simons-jiang/dsh-git-window.git
 上架流程（公开仓库 → 可选发 npm → 去 `awesome-dsh-plugin` 提一条条目 PR）、图标与截图要求、
 发版清单都写在 [PUBLISHING.md](PUBLISHING.md)。
 
+## 更新日志
+
+每个版本的新增、修复与破坏性变更都记录在 [CHANGELOG.md](CHANGELOG.md)；发版前同步更新。
+
 ## 开发
 
 ```bash
