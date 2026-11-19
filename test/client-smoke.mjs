@@ -15,6 +15,7 @@
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { macPlatform, windowsPlatform } from '../platform/index.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..')
@@ -102,6 +103,9 @@ const cleanups = []
 
 // ------------------------------------------------------------------- Host stubs
 const repo = '/tmp/demo-repo'
+/** Mutable Host view: the platform checks at the end switch both of these. */
+let hostRepo = { path: repo, root: repo, title: 'demo-repo', updatedAt: '2026-11-01T00:00:00Z', sessionCount: 2 }
+let hostPlatform = macPlatform
 const conflictWorktree = [
   '<project>',
   '<<<<<<< HEAD',
@@ -116,10 +120,7 @@ const conflictWorktree = [
 function hostValue(method) {
   switch (method) {
     case 'repos':
-      return {
-        workspaces: [{ path: repo, root: repo, title: 'demo-repo', updatedAt: '2026-11-01T00:00:00Z', sessionCount: 2 }],
-        platform: { id: 'macos', label: 'macOS', separator: '/', caseInsensitive: true },
-      }
+      return { workspaces: [hostRepo], platform: hostPlatform.describe() }
     case 'log':
       return {
         repo: { root: repo, branch: 'main', detached: false, head: 'abc1234', upstream: 'origin/main', ahead: 0, behind: 0, changeCount: 1, conflicts: [], merging: false },
@@ -337,6 +338,8 @@ await new Promise((resolve) => setTimeout(resolve, 30))
 let state = store.getState()
 check('repository loaded', state.repo?.path === repo, JSON.stringify(state.repo))
 check('platform facts arrive from the host', state.platform?.id === 'macos', JSON.stringify(state.platform))
+check('client mirror takes the host separator', state.platform.getPathSeparator() === macPlatform.describe().separator, String(state.platform.getPathSeparator()))
+check('client mirror takes the host case rule', state.platform.isCaseInsensitive() === macPlatform.describe().caseInsensitive)
 check('commits loaded', state.commits.length === 2, String(state.commits.length))
 check('graph rows built', state.graphRows.length === 2, String(state.graphRows.length))
 check('first commit auto-selected', state.selected?.hash === 'abc1234def', JSON.stringify(state.selected))
@@ -402,6 +405,32 @@ check('accepted side shows in the result column', resolvedText.includes('已解�
 await store.applyMerge()
 await new Promise((resolve) => setTimeout(resolve, 30))
 check('apply closes the window', store.getState().merge === null)
+
+// ------------------------------------------------------- platform mirror checks
+const macFacts = macPlatform.describe()
+state = store.getState()
+check('macOS client containment matches the host rule',
+  state.platform.covers('/tmp/demo-repo', '/tmp/demo-repo/src') === macPlatform.isPathInside('/tmp/demo-repo', '/tmp/demo-repo/src'))
+
+hostPlatform = windowsPlatform
+hostRepo = { path: 'C:\\Work\\Repo', root: 'C:\\Work\\Repo', title: 'win-repo', updatedAt: '2026-11-01T00:00:00Z', sessionCount: 1 }
+await store.loadRepos()
+await new Promise((resolve) => setTimeout(resolve, 30))
+state = store.getState()
+const winFacts = windowsPlatform.describe()
+check('windows platform facts applied to the client',
+  state.platform.id === 'windows' && state.platform.getPathSeparator() === winFacts.separator && state.platform.isCaseInsensitive() === winFacts.caseInsensitive,
+  JSON.stringify({ id: state.platform.id, separator: state.platform.getPathSeparator(), caseInsensitive: state.platform.isCaseInsensitive() }))
+check('windows repository loaded from a backslash path', state.repo?.path === 'C:\\Work\\Repo', JSON.stringify(state.repo))
+const winCases = [
+  ['C:\\Work\\Repo', 'c:\\work\\repo\\src\\A.java'],
+  ['C:\\Work\\Repo', 'C:\\Work\\Repo2\\src'],
+  ['C:\\Work\\Repo', 'C:\\Work\\Repo'],
+  ['C:\\', 'C:\\anything'],
+]
+check('windows client containment matches the host rule',
+  winCases.every(([parent, child]) => state.platform.covers(parent, child) === windowsPlatform.isPathInside(parent, child)),
+  JSON.stringify(winCases.map(([parent, child]) => [parent, child, state.platform.covers(parent, child), windowsPlatform.isPathInside(parent, child)])))
 
 // ------------------------------------------------------------------- teardown
 cleanups.forEach((cleanup) => {
