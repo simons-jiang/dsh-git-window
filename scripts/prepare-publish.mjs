@@ -26,6 +26,7 @@ const SHIPPED = [
   'icon.svg',
   'README.md',
   'PUBLISHING.md',
+  'CHANGELOG.md',
   'LICENSE',
   'locale',
   'platform',
